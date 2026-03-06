@@ -2,21 +2,19 @@
 # Demonstrates a simple single-role configuration with time-limited access
 # This example shows external contractors with read-only access to specific repositories
 
-# External Contractors - Read-only access to designated repositories
-# Note: In production, consider using GitHub's "outside collaborator" feature
-# and regularly audit these permissions for expired contracts
-contractors:
-  members:
-    - contractor-alice
-    - contractor-bob
-    - contractor-charlie
-  repositories:
-    - repo: observability-s/public-docs
-      permission: pull
-    - repo: observability-s/api-specs
-      permission: pull
-    - repo: observability-s/integration-examples
-      permission: pull
+team_name: External Contractors
+
+users:
+  - contractor-alice
+  - contractor-bob
+  - contractor-charlie
+
+roles:
+  # Read-only access to designated repositories
+  pull:
+    - public-docs
+    - api-specs
+    - integration-examples
 
 # Best Practices for Contractor Access:
 #
@@ -47,24 +45,24 @@ contractors:
 #    - Consider IP allowlisting for sensitive repositories
 #    - Use branch protection rules to prevent direct pushes
 #
-# Example Offboarding Command:
+# Example Offboarding:
 #   1. Remove contractor from this file
-#   2. Run: github-collab-manager apply --config contractors.yaml
-#   3. Verify: github-collab-manager apply --config contractors.yaml --dry-run
-#   4. Check audit logs: cat audit.log | grep contractor-alice
+#   2. Run: github-collab-manager --teams-dir examples/teams
+#   3. Verify: github-collab-manager --teams-dir examples/teams --dry-run
+#   4. Check audit logs for contractor activity
 
 # Example Usage:
 #
 # Apply contractor access:
-#   github-collab-manager apply --config examples/teams/contractors.yaml
+#   github-collab-manager --teams-dir examples/teams
 #
 # Preview changes before applying:
-#   github-collab-manager apply --config examples/teams/contractors.yaml --dry-run
+#   github-collab-manager --teams-dir examples/teams --dry-run
 #
 # Validate configuration without GitHub connection:
-#   github-collab-manager validate --config examples/teams/contractors.yaml
+#   github-collab-manager --teams-dir examples/teams --validate-only
 #
 # Remove stale contractors (those not in any config file):
-#   github-collab-manager apply --config examples/teams/contractors.yaml --remove-stale
+#   github-collab-manager --teams-dir examples/teams --remove-stale
 
 # Made with Bob

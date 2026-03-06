@@ -3,90 +3,96 @@
 # This example shows how the same user can have different permissions
 # across different repositories based on their role assignments
 
-# Security Leads - Full admin access to all security-related repositories
-security-leads:
-  members:
-    - alice-security
-    - bob-infosec
-  repositories:
-    - repo: observability-s/security-scanner
-      permission: admin
-    - repo: observability-s/vulnerability-tracker
-      permission: admin
-    - repo: observability-s/incident-response
-      permission: admin
-    - repo: observability-s/compliance-tools
-      permission: admin
+team_name: Security Team
 
-# Security Engineers - Write access to implementation repositories
-security-engineers:
-  members:
-    - alice-security      # Also in security-leads (higher permission wins)
-    - charlie-devsec
-    - diana-appsec
-  repositories:
-    - repo: observability-s/security-scanner
-      permission: push
-    - repo: observability-s/vulnerability-tracker
-      permission: push
-    - repo: observability-s/security-automation
-      permission: push
+users:
+  - alice-security
+  - bob-infosec
+  - charlie-devsec
+  - diana-appsec
+  - eve-analyst
+  - frank-soc
+  - grace-compliance
+  - henry-auditor
 
-# Security Analysts - Read access for monitoring and analysis
-security-analysts:
-  members:
-    - bob-infosec         # Also in security-leads (higher permission wins)
-    - eve-analyst
-    - frank-soc
-  repositories:
-    - repo: observability-s/security-scanner
-      permission: pull
-    - repo: observability-s/vulnerability-tracker
-      permission: pull
-    - repo: observability-s/incident-response
-      permission: pull
-    - repo: observability-s/audit-logs
-      permission: pull
+roles:
+  # Admin access to security-critical repositories
+  admin:
+    - security-scanner
+    - vulnerability-tracker
+    - incident-response
+    - compliance-tools
+  
+  # Write access to implementation repositories
+  push:
+    - security-scanner
+    - vulnerability-tracker
+    - security-automation
+    - policy-docs
+  
+  # Read access for monitoring and analysis
+  pull:
+    - security-scanner
+    - vulnerability-tracker
+    - incident-response
+    - audit-logs
+    - compliance-tools
+    - policy-docs
 
-# Compliance Team - Read access to compliance and audit repositories
-compliance-team:
-  members:
-    - grace-compliance
-    - henry-auditor
-    - alice-security      # Also in security-leads and security-engineers
-  repositories:
-    - repo: observability-s/compliance-tools
-      permission: pull
-    - repo: observability-s/audit-logs
-      permission: pull
-    - repo: observability-s/policy-docs
-      permission: push
-
-# Expected Effective Permissions (after conflict resolution):
-# 
+# Note on Overlapping Permissions:
+#
+# When the same user appears in multiple roles for the same repository,
+# the conflict resolution follows alphabetical file processing order.
+# Within a single file, all roles are applied, and GitHub will use the
+# highest permission level granted.
+#
+# For example, if alice-security is in both the admin and push roles
+# for security-scanner, GitHub will grant admin access (highest permission).
+#
+# Expected Effective Permissions (GitHub takes highest):
+#
 # alice-security:
-#   - security-scanner: admin (from security-leads, highest)
-#   - vulnerability-tracker: admin (from security-leads, highest)
-#   - incident-response: admin (from security-leads)
-#   - compliance-tools: admin (from security-leads, highest)
-#   - security-automation: push (from security-engineers, only role)
-#   - audit-logs: pull (from compliance-team, only role)
-#   - policy-docs: push (from compliance-team, only role)
+#   - security-scanner: admin (highest of admin/push/pull)
+#   - vulnerability-tracker: admin (highest of admin/push/pull)
+#   - incident-response: admin (highest of admin/pull)
+#   - compliance-tools: admin (highest of admin/pull)
+#   - security-automation: push (only push granted)
+#   - audit-logs: pull (only pull granted)
+#   - policy-docs: push (highest of push/pull)
 #
 # bob-infosec:
-#   - security-scanner: admin (from security-leads, highest)
-#   - vulnerability-tracker: admin (from security-leads, highest)
-#   - incident-response: admin (from security-leads, highest)
-#   - compliance-tools: admin (from security-leads)
-#   - audit-logs: pull (from security-analysts, only role)
+#   - security-scanner: admin (highest of admin/push/pull)
+#   - vulnerability-tracker: admin (highest of admin/push/pull)
+#   - incident-response: admin (highest of admin/pull)
+#   - compliance-tools: admin (highest of admin/pull)
+#   - security-automation: push (only push granted)
+#   - audit-logs: pull (only pull granted)
+#   - policy-docs: push (highest of push/pull)
 #
 # charlie-devsec:
-#   - security-scanner: push (from security-engineers, only role)
-#   - vulnerability-tracker: push (from security-engineers, only role)
-#   - security-automation: push (from security-engineers, only role)
+#   - security-scanner: push (highest of push/pull)
+#   - vulnerability-tracker: push (highest of push/pull)
+#   - security-automation: push (only push granted)
+#   - incident-response: pull (only pull granted)
+#   - audit-logs: pull (only pull granted)
+#   - compliance-tools: pull (only pull granted)
+#   - policy-docs: push (highest of push/pull)
 #
-# Note: This demonstrates the conflict resolution strategy where
-# higher permissions (admin > push > pull) take precedence when
-# a user appears in multiple roles for the same repository.
+# Best Practices:
+#
+# 1. Role Separation:
+#    - Clearly define who needs admin vs write vs read access
+#    - Use principle of least privilege
+#    - Document why users need elevated permissions
+#
+# 2. Regular Reviews:
+#    - Audit security team access quarterly
+#    - Remove users who change roles or leave
+#    - Verify admin access is still required
+#
+# 3. Compliance:
+#    - Maintain audit logs of all access changes
+#    - Document security incidents and access reviews
+#    - Follow organizational security policies
 
 # Made with Bob
