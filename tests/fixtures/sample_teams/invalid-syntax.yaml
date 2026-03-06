@@ -1,0 +1,12 @@
+# Invalid YAML syntax for testing
+team_name: Broken Team
+users:
+  - alice
+  - bob
+roles:
+  push:
+    - repo-a
+  admin: [repo-b, repo-c
+# Missing closing bracket above - invalid YAML
+
+# Made with Bob

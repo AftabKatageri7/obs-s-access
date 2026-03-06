@@ -1,0 +1,8 @@
+# Missing required fields for testing
+team_name: Incomplete Team
+# Missing 'users' field
+roles:
+  push:
+    - repo-a
+
+# Made with Bob

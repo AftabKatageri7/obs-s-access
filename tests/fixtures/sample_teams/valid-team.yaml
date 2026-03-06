@@ -1,0 +1,16 @@
+# Valid team configuration for testing
+team_name: Test Team
+users:
+  - alice
+  - bob
+  - charlie
+roles:
+  pull:
+    - repo-a
+    - repo-b
+  push:
+    - repo-c
+  admin:
+    - repo-d
+
+# Made with Bob

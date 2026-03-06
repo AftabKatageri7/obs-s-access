@@ -1,0 +1,70 @@
+# Contractors Team Configuration
+# Demonstrates a simple single-role configuration with time-limited access
+# This example shows external contractors with read-only access to specific repositories
+
+# External Contractors - Read-only access to designated repositories
+# Note: In production, consider using GitHub's "outside collaborator" feature
+# and regularly audit these permissions for expired contracts
+contractors:
+  members:
+    - contractor-alice
+    - contractor-bob
+    - contractor-charlie
+  repositories:
+    - repo: observability-s/public-docs
+      permission: pull
+    - repo: observability-s/api-specs
+      permission: pull
+    - repo: observability-s/integration-examples
+      permission: pull
+
+# Best Practices for Contractor Access:
+#
+# 1. Time-Limited Access:
+#    - Document contract end dates in team management system
+#    - Schedule regular reviews (monthly/quarterly)
+#    - Use automation to flag expired contractor accounts
+#
+# 2. Minimal Permissions:
+#    - Grant only "pull" (read) access unless write access is required
+#    - Limit repository access to only what's needed for the contract
+#    - Never grant admin permissions to contractors
+#
+# 3. Audit Trail:
+#    - Enable audit logging for all contractor actions
+#    - Review audit logs regularly for unusual activity
+#    - Document the business justification for each contractor's access
+#
+# 4. Offboarding Process:
+#    - Remove contractor from this YAML file when contract ends
+#    - Run the tool to revoke GitHub access immediately
+#    - Verify removal in GitHub UI
+#    - Archive audit logs for compliance
+#
+# 5. Security Considerations:
+#    - Contractors should use separate GitHub accounts (not personal)
+#    - Require 2FA for all contractor accounts
+#    - Consider IP allowlisting for sensitive repositories
+#    - Use branch protection rules to prevent direct pushes
+#
+# Example Offboarding Command:
+#   1. Remove contractor from this file
+#   2. Run: github-collab-manager apply --config contractors.yaml
+#   3. Verify: github-collab-manager apply --config contractors.yaml --dry-run
+#   4. Check audit logs: cat audit.log | grep contractor-alice
+
+# Example Usage:
+#
+# Apply contractor access:
+#   github-collab-manager apply --config examples/teams/contractors.yaml
+#
+# Preview changes before applying:
+#   github-collab-manager apply --config examples/teams/contractors.yaml --dry-run
+#
+# Validate configuration without GitHub connection:
+#   github-collab-manager validate --config examples/teams/contractors.yaml
+#
+# Remove stale contractors (those not in any config file):
+#   github-collab-manager apply --config examples/teams/contractors.yaml --remove-stale
+
+# Made with Bob
