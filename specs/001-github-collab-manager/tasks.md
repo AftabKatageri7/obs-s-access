@@ -183,6 +183,20 @@ This task list breaks down the GitHub Collaborator Manager implementation into a
 
 ---
 
+## Phase 8: Remediation Tasks
+
+**Objective**: Fix critical issues discovered during validation.
+
+**Tasks**:
+
+- [x] T082 [CRITICAL] Fix PyGithub API compatibility in get_rate_limit() method in src/github_collab_manager/github_client.py and update CLI to use correct key name
+- [ ] T083 Add unit tests for get_rate_limit() with different PyGithub versions in tests/test_github_client.py
+- [ ] T084 Document PyGithub version compatibility in README.md
+
+**Validation**: Rate limit checking works correctly with PyGithub v2.x and application runs without AttributeError.
+
+---
+
 ## Dependencies
 
 ### User Story Completion Order

@@ -37,12 +37,26 @@ pip install -e .
 
 ### Environment Variables
 
-Create a `.env` file in the project root (see `.env.example`):
+The tool automatically loads environment variables from a `.env` file in the project root if it exists. Create a `.env` file (see `.env.example`):
 
 ```bash
 GITHUB_TOKEN=your_github_personal_access_token
 GITHUB_ORG=observability-s
 LOG_LEVEL=INFO
+```
+
+**Note**: The `.env` file is automatically loaded when you run the CLI. You don't need to manually export these variables or use tools like `source` or `dotenv`.
+
+Alternatively, you can set environment variables manually or pass them as command-line arguments:
+
+```bash
+# Using environment variables
+export GITHUB_TOKEN=your_token
+export GITHUB_ORG=observability-s
+github-collab-manager --teams-dir ./teams
+
+# Using command-line arguments
+github-collab-manager --teams-dir ./teams --github-token your_token --github-org observability-s
 ```
 
 ### GitHub Token Permissions

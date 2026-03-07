@@ -9,6 +9,14 @@ import argparse
 from pathlib import Path
 from typing import List, Optional
 
+# Load environment variables from .env file if it exists
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # python-dotenv not installed, skip .env loading
+    pass
+
 from .config_loader import load_team_configs
 from .github_client import GitHubClient
 from .manager import CollaboratorManager
@@ -324,7 +332,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         rate_limit = github_client.get_rate_limit()
         logger.log_info(
             f"GitHub API rate limit: {rate_limit['remaining']}/{rate_limit['limit']} remaining, "
-            f"resets at {rate_limit['reset_time']}",
+            f"resets at {rate_limit['reset_timestamp']}",
             rate_limit_remaining=rate_limit['remaining'],
             rate_limit_total=rate_limit['limit']
         )
