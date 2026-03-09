@@ -438,18 +438,96 @@ Result:
    github-collab-manager --teams-dir ./teams --validate-only
    ```
 
-### Permission Denied
+### Permission Denied (403 Forbidden)
 
-**Problem**: `Permission denied when adding collaborator`
+**Problem**: `Permission denied: Cannot add <user> to <repository>. The GitHub token lacks 'admin' or 'maintain' permissions for this repository.`
+
+**Root Cause**: The GitHub Personal Access Token being used doesn't have sufficient permissions to manage collaborators on the specific repository. This is the most common error when managing repository access.
 
 **Solution**:
-1. Verify your token has `read:org` scope (not `admin:org` - that's too broad)
-2. Check you have admin access to the target repository
-   - You must be a repository admin to add/modify collaborators
-   - Organization owners have admin access to all repos
-3. Ensure the organization allows collaborator management
-   - Some organizations restrict who can add collaborators
-   - Check organization settings under "Member privileges"
+
+1. **Verify Repository-Level Permissions**
+   
+   The token owner must have **admin** or **maintain** permissions on the target repository:
+   
+   ```bash
+   # Check your permission level on a repository
+   curl -H "Authorization: token YOUR_TOKEN" \
+     https://api.github.com/repos/ORGANIZATION/REPOSITORY/collaborators/YOUR_USERNAME/permission
+   ```
+   
+   Expected response should show `"permission": "admin"` or `"permission": "maintain"`.
+
+2. **Check Token Scopes**
+   
+   Your GitHub token must have the `repo` scope (full control of private repositories):
+   
+   - Go to https://github.com/settings/tokens
+   - Click on your token to view its scopes
+   - Ensure `repo` is checked (this includes all sub-scopes)
+   - If missing, regenerate the token with correct scopes
+
+3. **Verify Organization Role**
+   
+   Your organization role affects repository access:
+   
+   - **Organization Owner**: Has admin access to all repositories
+   - **Organization Member**: Needs explicit repository permissions
+   - **Outside Collaborator**: Cannot manage other collaborators
+   
+   Check your role:
+   ```bash
+   curl -H "Authorization: token YOUR_TOKEN" \
+     https://api.github.com/orgs/ORGANIZATION/memberships/YOUR_USERNAME
+   ```
+
+4. **Request Repository Admin Access**
+   
+   If you don't have admin/maintain permissions:
+   
+   - Contact a repository administrator or organization owner
+   - Request admin or maintain access to the repositories you need to manage
+   - Alternatively, have an admin run the tool with their credentials
+
+5. **Organization Settings**
+   
+   Some organizations restrict collaborator management:
+   
+   - Go to Organization Settings → Member privileges
+   - Check "Base permissions" and "Repository creation" settings
+   - Ensure members can manage collaborators (if you're not an owner)
+
+**Workaround for Multiple Repositories**:
+
+If you encounter 403 errors on some repositories but not others:
+
+1. The tool will continue processing other repositories (fail-safe behavior)
+2. Check the audit logs to see which repositories succeeded/failed
+3. Use `--dry-run` first to identify problematic repositories
+4. Split team configurations to separate accessible vs. inaccessible repos
+5. Request appropriate permissions for the failing repositories
+
+**Example Error Message**:
+```
+ERROR: Permission denied: Cannot add carlosteaches to sysdig-terraform-modules.
+The GitHub token lacks 'admin' or 'maintain' permissions for this repository.
+Please verify the token has sufficient access rights.
+```
+
+**Verification Steps**:
+```bash
+# 1. Test token validity
+curl -H "Authorization: token YOUR_TOKEN" https://api.github.com/user
+
+# 2. Check your permission on specific repository
+curl -H "Authorization: token YOUR_TOKEN" \
+  https://api.github.com/repos/observability-s/sysdig-terraform-modules/collaborators/YOUR_USERNAME/permission
+
+# 3. List repositories you have admin access to
+curl -H "Authorization: token YOUR_TOKEN" \
+  "https://api.github.com/user/repos?affiliation=owner,collaborator&per_page=100" | \
+  jq '.[] | select(.permissions.admin == true) | .full_name'
+```
 
 ### YAML Parsing Errors
 
