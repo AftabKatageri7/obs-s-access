@@ -1,0 +1,29 @@
+# Frontend Team Configuration
+# This team has access to frontend applications and UI repositories
+
+team_name: Frontend Team
+
+users:
+  - diana-frontend
+  - eve-frontend
+  - frank-frontend
+
+roles:
+  # Read-only access to backend APIs for integration
+  pull:
+    - obs-s-api-gateway
+    - obs-s-docs
+  
+  # Write access to frontend applications
+  push:
+    - obs-s-dashboard
+    - obs-s-web-ui
+    - obs-s-mobile-app
+    - obs-s-component-library
+  
+  # Admin access to frontend infrastructure
+  admin:
+    - obs-s-frontend-infra
+    - obs-s-cdn-config
+
+# Made with Bob

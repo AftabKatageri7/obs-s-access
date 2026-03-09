@@ -1,0 +1,21 @@
+# Sysdig Dev Team Configuration
+# This team has access to repositories that are related to the Sysdig-I project
+
+team_name: Sysdig Dev Team
+
+users:
+  - carlosteaches
+  - ctolon22
+  - figarocorso
+  - vcaldaralo
+
+roles:
+
+  # Write access
+  push:
+    - sysdig-terraform-modules
+    - sysdig-smoke-tests
+    - sysdig-runbooks
+    - sysdig-argo-applications
+    - sysdig-charts
+    - sysdig-support
