@@ -153,7 +153,7 @@ class GitHubClient:
         
         return collaborators
     
-    def add_collaborator(self, repo: Repository, username: str, 
+    def add_collaborator(self, repo: Repository, username: str,
                         permission: str) -> OperationResult:
         """Add a collaborator to a repository.
         
@@ -181,7 +181,29 @@ class GitHubClient:
             )
             
         except GithubException as e:
-            error_msg = f"Failed to add {username} to {repo.name}: {e.data.get('message', str(e)) if hasattr(e, 'data') else str(e)}"
+            # Provide specific error messages for common issues
+            if e.status == 403:
+                error_msg = (
+                    f"Permission denied: Cannot add {username} to {repo.name}. "
+                    f"The GitHub token lacks 'admin' or 'maintain' permissions for this repository. "
+                    f"Please verify the token has sufficient access rights."
+                )
+            elif e.status == 404:
+                error_msg = f"User or repository not found: {username} or {repo.name}"
+            elif e.status == 422:
+                error_msg = f"Invalid request: Check that '{permission}' is a valid role and {username} is a valid GitHub user"
+            else:
+                error_msg = f"Failed to add {username} to {repo.name}: {e.data.get('message', str(e)) if hasattr(e, 'data') else str(e)}"
+            
+            self.logger.log_error(
+                error_msg,
+                user=username,
+                repository=repo.name,
+                role=permission,
+                status_code=e.status if hasattr(e, 'status') else None,
+                error=str(e)
+            )
+            
             return OperationResult(
                 success=False,
                 action="add_collaborator",
@@ -202,7 +224,7 @@ class GitHubClient:
                 error=e
             )
     
-    def update_collaborator(self, repo: Repository, username: str, 
+    def update_collaborator(self, repo: Repository, username: str,
                            permission: str) -> OperationResult:
         """Update a collaborator's permission level.
         
@@ -230,7 +252,29 @@ class GitHubClient:
             )
             
         except GithubException as e:
-            error_msg = f"Failed to update {username} on {repo.name}: {e.data.get('message', str(e)) if hasattr(e, 'data') else str(e)}"
+            # Provide specific error messages for common issues
+            if e.status == 403:
+                error_msg = (
+                    f"Permission denied: Cannot update {username} on {repo.name}. "
+                    f"The GitHub token lacks 'admin' or 'maintain' permissions for this repository. "
+                    f"Please verify the token has sufficient access rights."
+                )
+            elif e.status == 404:
+                error_msg = f"User or repository not found: {username} or {repo.name}"
+            elif e.status == 422:
+                error_msg = f"Invalid request: Check that '{permission}' is a valid role and {username} is a valid GitHub user"
+            else:
+                error_msg = f"Failed to update {username} on {repo.name}: {e.data.get('message', str(e)) if hasattr(e, 'data') else str(e)}"
+            
+            self.logger.log_error(
+                error_msg,
+                user=username,
+                repository=repo.name,
+                role=permission,
+                status_code=e.status if hasattr(e, 'status') else None,
+                error=str(e)
+            )
+            
             return OperationResult(
                 success=False,
                 action="update_collaborator",
