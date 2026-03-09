@@ -19,3 +19,5 @@ roles:
     - sysdig-argo-applications
     - sysdig-charts
     - sysdig-support
+    - sysdig-architecture-compliance
+    - sysdig-project-management
