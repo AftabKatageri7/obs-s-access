@@ -61,15 +61,21 @@ github-collab-manager --teams-dir ./teams --github-token your_token --github-org
 
 ### GitHub Token Permissions
 
-Your GitHub Personal Access Token needs the following scopes:
-- `repo` - Full control of private repositories
-- `admin:org` - Full control of orgs and teams (for managing collaborators)
+**Important**: This tool requires a **fine-grained personal access token**. Classic tokens are not supported by the organization.
 
-To create a token:
-1. Go to GitHub Settings → Developer settings → Personal access tokens
-2. Click "Generate new token (classic)"
-3. Select the required scopes
-4. Copy the token and store it securely
+Your fine-grained token must have the following **repository permissions**:
+- **Administration**: Read and write
+- **Metadata**: Read
+
+To create a fine-grained token:
+1. Go to GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens
+2. Click "Generate new token"
+3. Set the token name and expiration
+4. Under "Repository access", select the repositories you need to manage
+5. Under "Repository permissions", set:
+   - **Administration**: Read and write
+   - **Metadata**: Read
+6. Click "Generate token" and copy it securely
 
 ### Team Configuration Files
 
@@ -377,10 +383,10 @@ Result:
    # Test token validity
    curl -H "Authorization: token YOUR_TOKEN" https://api.github.com/user
    ```
-2. Check token has required scopes (`repo`, `read:org`)
-   - Go to https://github.com/settings/tokens
-   - Click on your token to view scopes
-   - Ensure `repo` and `read:org` are checked
+2. Check token has required permissions (fine-grained tokens only)
+   - Go to https://github.com/settings/tokens?type=beta
+   - Click on your token to view permissions
+   - Ensure **Administration** is set to "Read and write" and **Metadata** is set to "Read"
 3. Ensure token is correctly set in environment or command-line
    ```bash
    echo $GITHUB_TOKEN  # Should show your token
@@ -458,14 +464,14 @@ Result:
    
    Expected response should show `"permission": "admin"` or `"permission": "maintain"`.
 
-2. **Check Token Scopes**
+2. **Check Token Permissions**
    
-   Your GitHub token must have the `repo` scope (full control of private repositories):
+   Your fine-grained GitHub token must have the required repository permissions:
    
-   - Go to https://github.com/settings/tokens
-   - Click on your token to view its scopes
-   - Ensure `repo` is checked (this includes all sub-scopes)
-   - If missing, regenerate the token with correct scopes
+   - Go to https://github.com/settings/tokens?type=beta
+   - Click on your token to view its permissions
+   - Ensure **Administration** is set to "Read and write" and **Metadata** is set to "Read"
+   - If missing, regenerate the token with correct permissions
 
 3. **Verify Organization Role**
    
@@ -650,12 +656,12 @@ This tool implements a zero-trust security model as defined in the project const
 #### 1. Token Security
 
 **DO**:
-- ✅ Use fine-grained personal access tokens with minimal required scopes
+- ✅ Use fine-grained personal access tokens (classic tokens are not supported)
+- ✅ Grant only the required permissions: Administration (read and write), Metadata (read)
 - ✅ Store tokens in environment variables or secure secret management systems
 - ✅ Rotate tokens regularly (every 90 days recommended)
 - ✅ Use separate tokens for different environments (dev, staging, prod)
 - ✅ Revoke tokens immediately when no longer needed
-- ✅ Use read-only tokens for validation and reporting operations
 
 **DON'T**:
 - ❌ Commit tokens to version control (use `.env` files with `.gitignore`)
@@ -749,7 +755,7 @@ This tool implements a zero-trust security model as defined in the project const
 
 Before running in production:
 
-- [ ] GitHub token has minimal required scopes (`repo`, `read:org`)
+- [ ] GitHub token is a fine-grained token with required permissions (Administration: read and write, Metadata: read)
 - [ ] Token is stored securely (environment variable or secret manager)
 - [ ] Team YAML files are in version control with review process
 - [ ] Tested with `--validate-only` and `--dry-run`
@@ -1048,18 +1054,24 @@ class OperationResult:
 
 ### Required GitHub Token Permissions
 
-Your GitHub personal access token must have the following scopes:
+**Important**: Only fine-grained personal access tokens are supported.
 
-- `repo` (Full control of private repositories)
-  - Required for reading and modifying collaborators
-- `admin:org` (Full control of orgs and teams)
-  - Required for organization-level operations
+Your fine-grained token must have the following **repository permissions**:
 
-To create a token:
-1. Go to GitHub Settings → Developer settings → Personal access tokens
-2. Click "Generate new token (classic)"
-3. Select the required scopes above
-4. Copy the token and store it securely
+- **Administration**: Read and write
+  - Required for managing repository collaborators
+- **Metadata**: Read
+  - Required for reading repository information
+
+To create a fine-grained token:
+1. Go to GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens
+2. Click "Generate new token"
+3. Set the token name and expiration
+4. Under "Repository access", select the repositories you need to manage
+5. Under "Repository permissions", set:
+   - **Administration**: Read and write
+   - **Metadata**: Read
+6. Click "Generate token" and copy it securely
 
 ## License
 
