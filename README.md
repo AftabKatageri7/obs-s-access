@@ -20,7 +20,53 @@ A Python CLI tool for managing GitHub repository collaborators using YAML-based 
 - GitHub Personal Access Token with appropriate permissions
 - Access to the target GitHub organization
 
+### Recommended: Use a Virtual Environment
+
+It is **strongly recommended** to use a Python virtual environment to isolate this project's dependencies from your system Python installation.
+
+#### Create and Activate Virtual Environment
+
+**Using `venv` (built into Python 3.3+):**
+
+```bash
+# Create virtual environment
+python3 -m venv .venv
+
+# Activate it
+# On macOS/Linux:
+source .venv/bin/activate
+
+# On Windows:
+.venv\Scripts\activate
+```
+
+**Using `virtualenv`:**
+
+```bash
+# Install virtualenv if needed
+pip install virtualenv
+
+# Create virtual environment
+virtualenv .venv
+
+# Activate it (same commands as above)
+source .venv/bin/activate  # macOS/Linux
+.venv\Scripts\activate     # Windows
+```
+
+**Verify activation:**
+```bash
+which python  # Should show path to .venv/bin/python
+```
+
+**Deactivate when done:**
+```bash
+deactivate
+```
+
 ### Install Dependencies
+
+**After activating your virtual environment**, install the required dependencies:
 
 ```bash
 pip install -r requirements.txt
@@ -28,10 +74,14 @@ pip install -r requirements.txt
 
 ### Development Installation
 
+For development work (includes testing tools):
+
 ```bash
 pip install -r requirements-dev.txt
 pip install -e .
 ```
+
+**Note**: The `.gitignore` file is already configured to exclude virtual environment directories (`.venv/`, `venv/`, `env/`, `ENV/`), so your virtual environment won't be committed to version control.
 
 ## Configuration
 
