@@ -8,6 +8,14 @@ users:
   - ctolon22
   - figarocorso
   - vcaldaralo
+  - mvalin
+  - darroyo-sysdig
+  - jdeiviz
+  - bennythejudge
+  - rperezcr
+  - ramirezalfredo
+  - rfungu
+  - janoe
 
 roles:
 
@@ -21,3 +29,5 @@ roles:
     - sysdig-support
     - sysdig-architecture-compliance
     - sysdig-project-management
+
+# Made with Bob
