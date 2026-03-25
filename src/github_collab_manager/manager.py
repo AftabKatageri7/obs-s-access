@@ -1,29 +1,34 @@
-"""Collaborator management logic for GitHub repositories.
+"""Collaborator management logic for GitHub repositories and projects.
 
 This module handles the business logic for processing team configurations,
-resolving conflicts, detecting changes, and applying access grants.
+resolving conflicts, detecting changes, and applying access grants to both
+repositories and GitHub Projects v2.
 """
 
-from typing import List, Dict, Set, Tuple
+from typing import List, Dict, Set, Tuple, Optional
 from collections import defaultdict
 
-from .models import TeamConfig, AccessGrant, OperationResult
+from .models import TeamConfig, AccessGrant, OperationResult, ProjectConfig
 from .github_client import GitHubClient
+from .projects_client import ProjectsClient
 from .audit_logger import AuditLogger
 
 
 class CollaboratorManager:
-    """Manages collaborator access across GitHub repositories."""
+    """Manages collaborator access across GitHub repositories and projects."""
     
-    def __init__(self, github_client: GitHubClient, logger: AuditLogger):
+    def __init__(self, github_client: GitHubClient, logger: AuditLogger,
+                 projects_client: Optional[ProjectsClient] = None):
         """Initialize collaborator manager.
         
         Args:
             github_client: Authenticated GitHub client
             logger: Audit logger instance
+            projects_client: Optional GitHub Projects v2 client for project access management
         """
         self.github_client = github_client
         self.logger = logger
+        self.projects_client = projects_client
     
     def process_team_configs(self, team_configs: List[TeamConfig]) -> Dict[str, Dict[str, str]]:
         """Process team configurations and resolve conflicts.
@@ -466,5 +471,175 @@ class CollaboratorManager:
         )
         
         return results
+    
+    def apply_project_access(self, team_configs: List[TeamConfig],
+                            organization: str, dry_run: bool = False) -> List[str]:
+        """Apply project access grants from team configurations.
+        
+        Args:
+            team_configs: List of TeamConfig objects with project definitions
+            organization: Organization name
+            dry_run: If True, only log planned changes without applying
+            
+        Returns:
+            List of error messages (empty if all successful)
+        """
+        if not self.projects_client:
+            self.logger.log_warning("Projects client not initialized - skipping project access")
+            return ["Projects client not initialized"]
+        
+        errors = []
+        
+        # Sort team configs by source file (alphabetical order for deterministic processing)
+        sorted_configs = sorted(team_configs, key=lambda tc: tc.source_file)
+        
+        # Count total project grants to process
+        total_grants = sum(
+            len(tc.users) * len(tc.projects)
+            for tc in sorted_configs
+            if tc.projects
+        )
+        
+        if total_grants == 0:
+            self.logger.log_info("No project access grants to process")
+            return errors
+        
+        self.logger.log_info(
+            f"{'[DRY RUN] ' if dry_run else ''}Processing {total_grants} project access grant(s) from {len(sorted_configs)} team(s)",
+            dry_run=dry_run,
+            total_grants=total_grants,
+            team_count=len(sorted_configs)
+        )
+        
+        # Process each team configuration
+        for team_config in sorted_configs:
+            if not team_config.projects:
+                continue
+            
+            self.logger.log_debug(
+                f"Processing project access for team '{team_config.team_name}'",
+                team_name=team_config.team_name,
+                source_file=team_config.source_file,
+                project_count=len(team_config.projects),
+                user_count=len(team_config.users)
+            )
+            
+            # Process each project in the team configuration
+            for project_config in team_config.projects:
+                # Determine project type and fetch project list
+                project_type = "unknown"  # Initialize to handle errors before type is determined
+                try:
+                    if project_config.repository:
+                        # Repository-level project
+                        projects = self.projects_client.list_repository_projects(
+                            organization, project_config.repository
+                        )
+                        project_type = "repository"
+                    else:
+                        # Organization-level project
+                        projects = self.projects_client.list_organization_projects(organization)
+                        project_type = "organization"
+                    
+                    # Find the specific project by number
+                    project = next(
+                        (p for p in projects if p['number'] == project_config.number),
+                        None
+                    )
+                    
+                    if not project:
+                        error_msg = (
+                            f"Project #{project_config.number} not found in "
+                            f"{'repository ' + project_config.repository if project_config.repository else 'organization'}"
+                        )
+                        errors.append(error_msg)
+                        self.logger.log_error(
+                            error_msg,
+                            project_number=project_config.number,
+                            project_type=project_type,
+                            repository=project_config.repository,
+                            team_name=team_config.team_name
+                        )
+                        continue
+                    
+                    # Grant access to each user in the team
+                    for username in team_config.users:
+                        try:
+                            # Get user ID (required for GraphQL mutations)
+                            user_id = self.projects_client.get_user_id(username)
+                            
+                            if dry_run:
+                                # Dry run - just log the planned operation
+                                self.logger.log_info(
+                                    f"[DRY RUN] Would grant {username} {project_config.permission.value} access to project #{project['number']}",
+                                    action="grant_project_access_dry_run",
+                                    user=username,
+                                    project_number=project['number'],
+                                    permission=project_config.permission.value,
+                                    project_type=project_type,
+                                    repository=project_config.repository
+                                )
+                            else:
+                                # Actually grant/update project access
+                                self.projects_client.update_project_collaborator(
+                                    project['id'],
+                                    user_id,
+                                    project_config.permission.value
+                                )
+                                
+                                # Log successful operation
+                                self.logger.log_project_operation(
+                                    action="grant_project_access",
+                                    user=username,
+                                    organization=organization,
+                                    project_number=project['number'],
+                                    permission=project_config.permission.value,
+                                    result="success",
+                                    message=f"Granted {username} {project_config.permission.value} access to project #{project['number']}",
+                                    source_team=team_config.team_name,
+                                    source_file=team_config.source_file,
+                                    project_type=project_type,
+                                    project_repository=project_config.repository
+                                )
+                        
+                        except Exception as e:
+                            error_msg = (
+                                f"Failed to grant {username} access to project #{project_config.number}: {e}"
+                            )
+                            errors.append(error_msg)
+                            self.logger.log_error(
+                                error_msg,
+                                error=e,
+                                user=username,
+                                project_number=project_config.number,
+                                permission=project_config.permission.value,
+                                project_type=project_type,
+                                repository=project_config.repository
+                            )
+                
+                except Exception as e:
+                    error_msg = (
+                        f"Failed to process project #{project_config.number}: {e}"
+                    )
+                    errors.append(error_msg)
+                    self.logger.log_error(
+                        error_msg,
+                        error=e,
+                        project_number=project_config.number,
+                        project_type=project_type,
+                        repository=project_config.repository
+                    )
+        
+        # Summary
+        success_count = total_grants - len(errors)
+        self.logger.log_info(
+            f"{'[DRY RUN] ' if dry_run else ''}Project access processing complete: "
+            f"{success_count} successful, {len(errors)} failed",
+            dry_run=dry_run,
+            total=total_grants,
+            success=success_count,
+            failure=len(errors)
+        )
+        
+        return errors
 
 # Made with Bob

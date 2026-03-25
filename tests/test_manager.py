@@ -570,4 +570,217 @@ class TestStaleCollaboratorRemoval:
         mock_github_client.remove_collaborator.assert_not_called()
 
 
+class TestProjectAccessIntegration:
+    """Integration tests for project access management."""
+    
+    def test_apply_project_access_org_projects(self, mock_github_client, mock_logger):
+        """Test applying project access for organization projects."""
+        from src.github_collab_manager.projects_client import ProjectsClient
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        # Create mock projects client
+        mock_projects_client = Mock(spec=ProjectsClient)
+        mock_projects_client.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Sprint Board', 'url': 'url1', 'closed': False}
+        ]
+        mock_projects_client.get_user_id.return_value = 'user_node_id'
+        mock_projects_client.update_project_collaborator.return_value = True
+        
+        # Create manager with projects client
+        manager = CollaboratorManager(mock_github_client, mock_logger, mock_projects_client)
+        
+        # Create team config with project access
+        team_configs = [
+            TeamConfig(
+                team_name="test-team",
+                users=["alice", "bob"],
+                roles={},
+                projects=[
+                    ProjectConfig(number=1, permission=ProjectPermission.WRITE)
+                ],
+                source_file="test.yaml"
+            )
+        ]
+        
+        # Apply project access
+        errors = manager.apply_project_access(team_configs, "test-org", dry_run=False)
+        
+        # Verify no errors
+        assert errors == []
+        
+        # Verify projects client was called correctly
+        mock_projects_client.list_organization_projects.assert_called_once_with("test-org")
+        assert mock_projects_client.get_user_id.call_count == 2  # alice and bob
+        assert mock_projects_client.update_project_collaborator.call_count == 2
+    
+    def test_apply_project_access_repo_projects(self, mock_github_client, mock_logger):
+        """Test applying project access for repository projects."""
+        from src.github_collab_manager.projects_client import ProjectsClient
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        mock_projects_client = Mock(spec=ProjectsClient)
+        mock_projects_client.list_repository_projects.return_value = [
+            {'id': 'proj_2', 'number': 5, 'title': 'Repo Board', 'url': 'url2', 'closed': False}
+        ]
+        mock_projects_client.get_user_id.return_value = 'user_node_id'
+        mock_projects_client.update_project_collaborator.return_value = True
+        
+        manager = CollaboratorManager(mock_github_client, mock_logger, mock_projects_client)
+        
+        team_configs = [
+            TeamConfig(
+                team_name="repo-team",
+                users=["charlie"],
+                roles={},
+                projects=[
+                    ProjectConfig(number=5, permission=ProjectPermission.READ, repository="my-repo")
+                ],
+                source_file="repo-team.yaml"
+            )
+        ]
+        
+        errors = manager.apply_project_access(team_configs, "test-org", dry_run=False)
+        
+        assert errors == []
+        mock_projects_client.list_repository_projects.assert_called_once_with("test-org", "my-repo")
+        mock_projects_client.get_user_id.assert_called_once_with("charlie")
+        mock_projects_client.update_project_collaborator.assert_called_once()
+    
+    def test_apply_project_access_dry_run(self, mock_github_client, mock_logger):
+        """Test dry-run mode for project access."""
+        from src.github_collab_manager.projects_client import ProjectsClient
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        mock_projects_client = Mock(spec=ProjectsClient)
+        mock_projects_client.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Board', 'url': 'url', 'closed': False}
+        ]
+        mock_projects_client.get_user_id.return_value = 'user_id'
+        
+        manager = CollaboratorManager(mock_github_client, mock_logger, mock_projects_client)
+        
+        team_configs = [
+            TeamConfig(
+                team_name="team",
+                users=["user1"],
+                roles={},
+                projects=[ProjectConfig(number=1, permission=ProjectPermission.ADMIN)],
+                source_file="team.yaml"
+            )
+        ]
+        
+        errors = manager.apply_project_access(team_configs, "org", dry_run=True)
+        
+        assert errors == []
+        # In dry-run, should not call update_project_collaborator
+        mock_projects_client.update_project_collaborator.assert_not_called()
+        # But should still validate projects exist
+        mock_projects_client.list_organization_projects.assert_called_once()
+    
+    def test_apply_project_access_handles_errors(self, mock_github_client, mock_logger):
+        """Test error handling in project access workflow."""
+        from src.github_collab_manager.projects_client import ProjectsClient, GraphQLError, GraphQLErrorCategory
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        mock_projects_client = Mock(spec=ProjectsClient)
+        mock_projects_client.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Board', 'url': 'url', 'closed': False}
+        ]
+        # User not found error
+        mock_projects_client.get_user_id.side_effect = GraphQLError(
+            "User not found",
+            GraphQLErrorCategory.NOT_FOUND,
+            Exception("not found")
+        )
+        
+        manager = CollaboratorManager(mock_github_client, mock_logger, mock_projects_client)
+        
+        team_configs = [
+            TeamConfig(
+                team_name="team",
+                users=["nonexistent"],
+                roles={},
+                projects=[ProjectConfig(number=1, permission=ProjectPermission.WRITE)],
+                source_file="team.yaml"
+            )
+        ]
+        
+        errors = manager.apply_project_access(team_configs, "org", dry_run=False)
+        
+        # Should collect error but not crash
+        assert len(errors) > 0
+        assert "nonexistent" in errors[0] or "not found" in errors[0].lower()
+    
+    def test_apply_project_access_mixed_org_and_repo(self, mock_github_client, mock_logger):
+        """Test applying access to both org and repo projects."""
+        from src.github_collab_manager.projects_client import ProjectsClient
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        mock_projects_client = Mock(spec=ProjectsClient)
+        mock_projects_client.list_organization_projects.return_value = [
+            {'id': 'org_proj', 'number': 1, 'title': 'Org Board', 'url': 'url1', 'closed': False}
+        ]
+        mock_projects_client.list_repository_projects.return_value = [
+            {'id': 'repo_proj', 'number': 2, 'title': 'Repo Board', 'url': 'url2', 'closed': False}
+        ]
+        mock_projects_client.get_user_id.return_value = 'user_id'
+        mock_projects_client.update_project_collaborator.return_value = True
+        
+        manager = CollaboratorManager(mock_github_client, mock_logger, mock_projects_client)
+        
+        team_configs = [
+            TeamConfig(
+                team_name="mixed-team",
+                users=["user1"],
+                roles={},
+                projects=[
+                    ProjectConfig(number=1, permission=ProjectPermission.WRITE),  # Org project
+                    ProjectConfig(number=2, permission=ProjectPermission.READ, repository="repo1")  # Repo project
+                ],
+                source_file="mixed.yaml"
+            )
+        ]
+        
+        errors = manager.apply_project_access(team_configs, "org", dry_run=False)
+        
+        assert errors == []
+        mock_projects_client.list_organization_projects.assert_called_once()
+        mock_projects_client.list_repository_projects.assert_called_once()
+        # Should grant access to both projects
+        assert mock_projects_client.update_project_collaborator.call_count == 2
+    
+    def test_apply_project_access_project_not_found(self, mock_github_client, mock_logger):
+        """Test handling when project doesn't exist."""
+        from src.github_collab_manager.projects_client import ProjectsClient
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        mock_projects_client = Mock(spec=ProjectsClient)
+        # Project 999 doesn't exist
+        mock_projects_client.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Board', 'url': 'url', 'closed': False}
+        ]
+        
+        manager = CollaboratorManager(mock_github_client, mock_logger, mock_projects_client)
+        
+        team_configs = [
+            TeamConfig(
+                team_name="team",
+                users=["user1"],
+                roles={},
+                projects=[
+                    ProjectConfig(number=999, permission=ProjectPermission.WRITE)  # Doesn't exist
+                ],
+                source_file="team.yaml"
+            )
+        ]
+        
+        errors = manager.apply_project_access(team_configs, "org", dry_run=False)
+        
+        # Should report error for nonexistent project
+        assert len(errors) > 0
+        assert "999" in errors[0] or "not found" in errors[0].lower()
+        # Should not attempt to grant access
+        mock_projects_client.update_project_collaborator.assert_not_called()
+
+
 # Made with Bob

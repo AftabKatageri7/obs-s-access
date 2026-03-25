@@ -72,20 +72,28 @@ class AuditLogger:
         message: str = "",
         source_team: str = "",
         source_file: str = "",
-        level: str = "INFO"
+        level: str = "INFO",
+        resource_type: str = "repository",
+        project_type: Optional[str] = None,
+        project_number: Optional[int] = None,
+        project_repository: Optional[str] = None
     ):
         """Log a GitHub API operation.
         
         Args:
             action: Type of action (add_collaborator, update_collaborator, etc.)
             user: GitHub username
-            repository: Repository name
+            repository: Repository name (for repo operations) or organization (for project operations)
             role: Permission level
             result: Operation result (success, failure, skipped)
             message: Additional context or error message
             source_team: Team that triggered this action
             source_file: YAML file that triggered this action
             level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+            resource_type: Type of resource ("repository" or "project")
+            project_type: For projects: "organization" or "repository"
+            project_number: For projects: project number
+            project_repository: For repository projects: repository name
         """
         if not self._should_log(level):
             return
@@ -102,15 +110,42 @@ class AuditLogger:
             source_file=source_file,
         )
         
-        self._write_log(entry.to_dict())
+        log_dict = entry.to_dict()
+        
+        # Add project-specific fields if this is a project operation
+        if resource_type == "project":
+            log_dict["resource_type"] = "project"
+            if project_type:
+                log_dict["project_type"] = project_type
+            if project_number is not None:
+                log_dict["project_number"] = project_number
+            if project_repository:
+                log_dict["project_repository"] = project_repository
+        else:
+            log_dict["resource_type"] = "repository"
+        
+        self._write_log(log_dict)
     
-    def log_operation_result(self, result: OperationResult, source_team: str = "", source_file: str = ""):
+    def log_operation_result(
+        self,
+        result: OperationResult,
+        source_team: str = "",
+        source_file: str = "",
+        resource_type: str = "repository",
+        project_type: Optional[str] = None,
+        project_number: Optional[int] = None,
+        project_repository: Optional[str] = None
+    ):
         """Log an OperationResult object.
         
         Args:
             result: OperationResult to log
             source_team: Team that triggered this action
             source_file: YAML file that triggered this action
+            resource_type: Type of resource ("repository" or "project")
+            project_type: For projects: "organization" or "repository"
+            project_number: For projects: project number
+            project_repository: For repository projects: repository name
         """
         level = "INFO" if result.success else "ERROR"
         self.log_operation(
@@ -123,6 +158,60 @@ class AuditLogger:
             source_team=source_team,
             source_file=source_file,
             level=level,
+            resource_type=resource_type,
+            project_type=project_type,
+            project_number=project_number,
+            project_repository=project_repository,
+        )
+    
+    def log_project_operation(
+        self,
+        action: str,
+        user: str,
+        organization: str,
+        project_number: int,
+        permission: str,
+        result: str,
+        message: str = "",
+        source_team: str = "",
+        source_file: str = "",
+        project_type: str = "organization",
+        project_repository: Optional[str] = None,
+        level: str = "INFO"
+    ):
+        """Log a GitHub Projects API operation.
+        
+        This is a convenience method for logging project operations with
+        proper field mapping.
+        
+        Args:
+            action: Type of action (grant_project_access, update_project_permission, etc.)
+            user: GitHub username
+            organization: Organization name
+            project_number: Project number
+            permission: Permission level (read, write, admin)
+            result: Operation result (success, failure, skipped)
+            message: Additional context or error message
+            source_team: Team that triggered this action
+            source_file: YAML file that triggered this action
+            project_type: "organization" or "repository"
+            project_repository: For repository projects: repository name
+            level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        """
+        self.log_operation(
+            action=action,
+            user=user,
+            repository=organization,  # Use repository field for organization
+            role=permission,
+            result=result,
+            message=message,
+            source_team=source_team,
+            source_file=source_file,
+            level=level,
+            resource_type="project",
+            project_type=project_type,
+            project_number=project_number,
+            project_repository=project_repository,
         )
     
     def log_info(self, message: str, **kwargs):

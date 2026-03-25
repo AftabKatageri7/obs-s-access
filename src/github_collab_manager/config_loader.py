@@ -9,11 +9,14 @@ from pathlib import Path
 from typing import List, Dict, Any
 import yaml
 
-from .models import TeamConfig, ValidationResult
+from .models import TeamConfig, ValidationResult, ProjectConfig, ProjectPermission
 
 
 # Valid GitHub repository permission levels
 VALID_ROLES = {'pull', 'triage', 'push', 'maintain', 'admin'}
+
+# Valid GitHub project permission levels
+VALID_PROJECT_PERMISSIONS = {'read', 'write', 'admin'}
 
 
 def load_yaml_file(file_path: str) -> Dict[str, Any]:
@@ -156,6 +159,154 @@ def validate_role_names(data: Dict[str, Any], file_path: str) -> ValidationResul
     )
 
 
+def validate_project_config(data: Dict[str, Any], file_path: str) -> ValidationResult:
+    """Validate the projects section of team configuration.
+    
+    Args:
+        data: Parsed YAML data
+        file_path: Path to file (for error messages)
+        
+    Returns:
+        ValidationResult with errors for invalid project configuration
+    """
+    errors = []
+    warnings = []
+    
+    # Projects section is optional - if missing, that's fine (backward compatibility)
+    if 'projects' not in data:
+        return ValidationResult(valid=True, errors=[], warnings=[])
+    
+    projects = data['projects']
+    
+    # Validate projects is a dictionary
+    if not isinstance(projects, dict):
+        errors.append(f"{file_path}: 'projects' must be a dictionary")
+        return ValidationResult(valid=False, errors=errors, warnings=warnings)
+    
+    # Validate organization_projects if present
+    if 'organization_projects' in projects:
+        org_projects = projects['organization_projects']
+        if not isinstance(org_projects, list):
+            errors.append(f"{file_path}: projects.organization_projects must be a list")
+        else:
+            for i, proj in enumerate(org_projects):
+                if not isinstance(proj, dict):
+                    errors.append(f"{file_path}: projects.organization_projects[{i}] must be a dictionary")
+                    continue
+                
+                # Validate number field
+                if 'number' not in proj:
+                    errors.append(f"{file_path}: projects.organization_projects[{i}] missing 'number' field")
+                elif not isinstance(proj['number'], int):
+                    errors.append(f"{file_path}: projects.organization_projects[{i}].number must be an integer")
+                elif proj['number'] <= 0:
+                    errors.append(f"{file_path}: projects.organization_projects[{i}].number must be positive")
+                
+                # Validate permission field
+                if 'permission' not in proj:
+                    errors.append(f"{file_path}: projects.organization_projects[{i}] missing 'permission' field")
+                elif not isinstance(proj['permission'], str):
+                    errors.append(f"{file_path}: projects.organization_projects[{i}].permission must be a string")
+                elif proj['permission'].lower() not in VALID_PROJECT_PERMISSIONS:
+                    errors.append(
+                        f"{file_path}: projects.organization_projects[{i}].permission '{proj['permission']}' invalid. "
+                        f"Valid permissions: {', '.join(sorted(VALID_PROJECT_PERMISSIONS))}"
+                    )
+    
+    # Validate repository_projects if present
+    if 'repository_projects' in projects:
+        repo_projects = projects['repository_projects']
+        if not isinstance(repo_projects, list):
+            errors.append(f"{file_path}: projects.repository_projects must be a list")
+        else:
+            for i, proj in enumerate(repo_projects):
+                if not isinstance(proj, dict):
+                    errors.append(f"{file_path}: projects.repository_projects[{i}] must be a dictionary")
+                    continue
+                
+                # Validate repository field
+                if 'repository' not in proj:
+                    errors.append(f"{file_path}: projects.repository_projects[{i}] missing 'repository' field")
+                elif not isinstance(proj['repository'], str):
+                    errors.append(f"{file_path}: projects.repository_projects[{i}].repository must be a string")
+                elif not proj['repository'].strip():
+                    errors.append(f"{file_path}: projects.repository_projects[{i}].repository cannot be empty")
+                
+                # Validate number field
+                if 'number' not in proj:
+                    errors.append(f"{file_path}: projects.repository_projects[{i}] missing 'number' field")
+                elif not isinstance(proj['number'], int):
+                    errors.append(f"{file_path}: projects.repository_projects[{i}].number must be an integer")
+                elif proj['number'] <= 0:
+                    errors.append(f"{file_path}: projects.repository_projects[{i}].number must be positive")
+                
+                # Validate permission field
+                if 'permission' not in proj:
+                    errors.append(f"{file_path}: projects.repository_projects[{i}] missing 'permission' field")
+                elif not isinstance(proj['permission'], str):
+                    errors.append(f"{file_path}: projects.repository_projects[{i}].permission must be a string")
+                elif proj['permission'].lower() not in VALID_PROJECT_PERMISSIONS:
+                    errors.append(
+                        f"{file_path}: projects.repository_projects[{i}].permission '{proj['permission']}' invalid. "
+                        f"Valid permissions: {', '.join(sorted(VALID_PROJECT_PERMISSIONS))}"
+                    )
+    
+    # Warn if projects section exists but is empty
+    if not projects.get('organization_projects') and not projects.get('repository_projects'):
+        warnings.append(f"{file_path}: 'projects' section is empty (no organization_projects or repository_projects)")
+    
+    return ValidationResult(
+        valid=len(errors) == 0,
+        errors=errors,
+        warnings=warnings
+    )
+
+
+def parse_project_configs(data: Dict[str, Any]) -> List[ProjectConfig]:
+    """Parse project configurations from YAML data.
+    
+    Args:
+        data: Parsed YAML data with optional 'projects' section
+        
+    Returns:
+        List of ProjectConfig objects
+    """
+    project_configs = []
+    
+    if 'projects' not in data:
+        return project_configs
+    
+    projects = data['projects']
+    
+    # Parse organization projects
+    if 'organization_projects' in projects:
+        for proj in projects['organization_projects']:
+            try:
+                project_configs.append(ProjectConfig(
+                    number=proj['number'],
+                    permission=proj['permission'],
+                    repository=None
+                ))
+            except (ValueError, KeyError) as e:
+                # Validation should have caught this, but be defensive
+                continue
+    
+    # Parse repository projects
+    if 'repository_projects' in projects:
+        for proj in projects['repository_projects']:
+            try:
+                project_configs.append(ProjectConfig(
+                    number=proj['number'],
+                    permission=proj['permission'],
+                    repository=proj['repository']
+                ))
+            except (ValueError, KeyError) as e:
+                # Validation should have caught this, but be defensive
+                continue
+    
+    return project_configs
+
+
 def load_team_configs(directory: str) -> tuple[List[TeamConfig], ValidationResult]:
     """Load all team configuration files from a directory.
     
@@ -215,11 +366,23 @@ def load_team_configs(directory: str) -> tuple[List[TeamConfig], ValidationResul
             if not role_result.valid:
                 continue  # Skip this file if roles are invalid
             
+            # Validate project configuration (optional section)
+            project_result = validate_project_config(data, str(yaml_file))
+            all_errors.extend(project_result.errors)
+            all_warnings.extend(project_result.warnings)
+            
+            if not project_result.valid:
+                continue  # Skip this file if projects are invalid
+            
+            # Parse project configurations
+            project_configs = parse_project_configs(data)
+            
             # Create TeamConfig object
             team_config = TeamConfig(
                 team_name=data['team_name'],
                 users=data['users'],
                 roles=data['roles'],
+                projects=project_configs,
                 source_file=str(yaml_file)
             )
             team_configs.append(team_config)

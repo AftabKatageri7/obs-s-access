@@ -1,0 +1,58 @@
+# Get Project Collaborators
+# Retrieves all collaborators for a specific project
+# Used to check current permissions and detect stale collaborators
+
+query GetProjectCollaborators($projectId: ID!, $cursor: String) {
+  node(id: $projectId) {
+    ... on ProjectV2 {
+      id
+      number
+      title
+      collaborators(first: 100, after: $cursor) {
+        nodes {
+          login
+          role
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        totalCount
+      }
+    }
+  }
+}
+
+# Example Variables:
+# {
+#   "projectId": "PVT_kwDOABCDEF4AABCD",
+#   "cursor": null
+# }
+
+# Example Response:
+# {
+#   "data": {
+#     "node": {
+#       "id": "PVT_kwDOABCDEF4AABCD",
+#       "number": 1,
+#       "title": "Main Development Board",
+#       "collaborators": {
+#         "nodes": [
+#           {
+#             "login": "alice-dev",
+#             "role": "WRITE"
+#           },
+#           {
+#             "login": "bob-engineer",
+#             "role": "READ"
+#           }
+#         ],
+#         "pageInfo": {
+#           "hasNextPage": false,
+#           "endCursor": null
+#         },
+#         "totalCount": 2
+#       }
+#     }
+#   }
+# }

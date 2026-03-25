@@ -19,6 +19,7 @@ except ImportError:
 
 from .config_loader import load_team_configs
 from .github_client import GitHubClient
+from .projects_client import ProjectsClient
 from .manager import CollaboratorManager
 from .audit_logger import AuditLogger
 from .models import ValidationResult
@@ -308,6 +309,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         logger.log_info(f"Connecting to GitHub organization: {org_name}")
         github_client = GitHubClient(token, org_name, logger)
         
+        # Initialize Projects client for GitHub Projects v2 API
+        logger.log_info("Initializing GitHub Projects client")
+        projects_client = ProjectsClient(token)
+        
         if not github_client.authenticate():
             logger.log_error(
                 "Failed to authenticate with GitHub",
@@ -337,8 +342,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             rate_limit_total=rate_limit['limit']
         )
         
-        # Initialize collaborator manager
-        manager = CollaboratorManager(github_client, logger)
+        # Initialize collaborator manager with projects support
+        manager = CollaboratorManager(github_client, logger, projects_client)
         
         # Process team configurations
         logger.log_info("Processing team configurations")
@@ -349,6 +354,16 @@ def main(argv: Optional[List[str]] = None) -> int:
             logger.log_info("Running in DRY RUN mode - no changes will be applied")
         
         results = manager.apply_access_grants(repo_access, dry_run=args.dry_run)
+        
+        # Apply project access grants
+        project_error_messages = manager.apply_project_access(
+            team_configs, org_name, dry_run=args.dry_run
+        )
+        
+        # Log any project errors
+        if project_error_messages:
+            for error_msg in project_error_messages:
+                logger.log_error(f"Project access error: {error_msg}")
         
         # Handle stale collaborator detection and removal
         stale_results = []
@@ -390,31 +405,53 @@ def main(argv: Optional[List[str]] = None) -> int:
         removals = sum(1 for r in stale_results if r.success and r.action == "remove")
         
         logger.log_info(
-            f"Operation complete: {success_count} successful, {failure_count} failed",
+            f"Repository operations: {success_count} successful, {failure_count} failed",
             total_operations=len(all_results),
             successful=success_count,
             failed=failure_count,
-            additions=additions,
-            updates=updates,
-            no_changes=no_changes,
-            removals=removals
+            repo_additions=additions,
+            repo_updates=updates,
+            repo_no_changes=no_changes,
+            repo_removals=removals
         )
+        
+        # Check if any teams have project configurations
+        has_projects = any(tc.projects for tc in team_configs)
+        project_error_count = len(project_error_messages)
+        
+        if has_projects:
+            if project_error_count > 0:
+                logger.log_warning(
+                    f"Project operations completed with {project_error_count} error(s)",
+                    project_errors=project_error_count
+                )
+            else:
+                logger.log_info("Project operations completed successfully")
         
         # Print operation summary
         print("\n" + "="*60)
         print("OPERATION SUMMARY")
         print("="*60)
-        print(f"Total operations:     {len(all_results)}")
+        print(f"Total repository operations: {len(all_results)}")
         print(f"  ✅ Successful:      {success_count}")
         print(f"  ❌ Failed:          {failure_count}")
         print()
-        print("Operation breakdown:")
+        print("Repository operation breakdown:")
         print(f"  ➕ Additions:       {additions}")
         print(f"  🔄 Updates:         {updates}")
         print(f"  ⏭️  No changes:      {no_changes}")
         if removals > 0:
             print(f"  🗑️  Removals:        {removals}")
         print()
+        
+        if has_projects:
+            print("Project access operations:")
+            if project_error_count > 0:
+                print(f"  ❌ Errors:          {project_error_count}")
+                print("     (See audit log for details)")
+            else:
+                print(f"  ✅ Completed successfully")
+            print()
         
         # Show affected repositories
         affected_repos = set(r.repository for r in all_results if r.success)
