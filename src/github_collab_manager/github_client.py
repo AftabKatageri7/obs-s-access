@@ -121,14 +121,25 @@ class GitHubClient:
             repo: Repository object
             
         Returns:
-            Dictionary mapping username to permission level
+            Dictionary mapping username to permission level (normalized to YAML format)
         """
         collaborators = {}
         
+        # Permission mapping: GitHub API → YAML format
+        PERMISSION_MAP = {
+            'read': 'pull',
+            'write': 'push',
+            'triage': 'triage',
+            'maintain': 'maintain',
+            'admin': 'admin'
+        }
+        
         try:
             for collab in repo.get_collaborators():
-                # Get permission level
-                permission = repo.get_collaborator_permission(collab)
+                # Get permission level from API
+                api_permission = repo.get_collaborator_permission(collab)
+                # Normalize to YAML format
+                permission = PERMISSION_MAP.get(api_permission, api_permission)
                 collaborators[collab.login] = permission
             
             self.logger.log_debug(

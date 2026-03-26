@@ -141,21 +141,21 @@ class TestListCollaborators:
         mock_repo = Mock(spec=Repository)
         mock_collab1 = Mock()
         mock_collab1.login = "user1"
-        mock_collab1.permissions.admin = False
-        mock_collab1.permissions.maintain = False
-        mock_collab1.permissions.push = True
-        mock_collab1.permissions.triage = False
-        mock_collab1.permissions.pull = False
         
         mock_collab2 = Mock()
         mock_collab2.login = "user2"
-        mock_collab2.permissions.admin = True
-        mock_collab2.permissions.maintain = False
-        mock_collab2.permissions.push = False
-        mock_collab2.permissions.triage = False
-        mock_collab2.permissions.pull = False
         
         mock_repo.get_collaborators.return_value = [mock_collab1, mock_collab2]
+        
+        # Mock get_collaborator_permission to return GitHub API format
+        # GitHub API returns "write" for push and "admin" for admin
+        def mock_get_permission(collab):
+            if collab.login == "user1":
+                return "write"  # GitHub API format for "push"
+            elif collab.login == "user2":
+                return "admin"
+        
+        mock_repo.get_collaborator_permission.side_effect = mock_get_permission
         
         result = github_client.list_collaborators(mock_repo)
         
