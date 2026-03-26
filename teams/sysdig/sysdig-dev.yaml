@@ -4,6 +4,7 @@
 team_name: Sysdig Dev Team
 
 users:
+  - arturodilecce
   - carlosteaches
   - ctolon22
   - figarocorso
@@ -12,6 +13,7 @@ users:
   - darroyo-sysdig
   - jdeiviz
   - bennythejudge
+  - massimoschembri
   - rperezcr
   - ramirezalfredo
   - rfungu
@@ -20,7 +22,7 @@ users:
 roles:
 
   # Write access
-  push:
+  write:
     - sysdig-terraform-modules
     - sysdig-smoke-tests
     - sysdig-runbooks
@@ -29,5 +31,11 @@ roles:
     - sysdig-support
     - sysdig-architecture-compliance
     - sysdig-project-management
+
+projects:
+  # Organization-level projects (no repository field)
+  organization_projects:
+    - number: 1
+      permission: write
 
 # Made with Bob

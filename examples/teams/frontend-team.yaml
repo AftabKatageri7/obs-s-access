@@ -10,12 +10,12 @@ users:
 
 roles:
   # Read-only access to backend APIs for integration
-  pull:
+  read:
     - obs-s-api-gateway
     - obs-s-docs
   
   # Write access to frontend applications
-  push:
+  write:
     - obs-s-dashboard
     - obs-s-web-ui
     - obs-s-mobile-app

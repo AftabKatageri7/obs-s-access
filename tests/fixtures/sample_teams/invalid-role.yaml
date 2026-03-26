@@ -6,7 +6,7 @@ users:
 roles:
   superuser:  # Invalid role - not a valid GitHub permission level
     - repo-a
-  push:
+  write:
     - repo-b
 
 # Made with Bob

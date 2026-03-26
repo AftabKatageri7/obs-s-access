@@ -9,11 +9,14 @@ from pathlib import Path
 from typing import List, Dict, Any
 import yaml
 
-from .models import TeamConfig, ValidationResult
+from .models import TeamConfig, ValidationResult, ProjectConfig, ProjectPermission
 
 
 # Valid GitHub repository permission levels
-VALID_ROLES = {'pull', 'triage', 'push', 'maintain', 'admin'}
+VALID_ROLES = {'read', 'triage', 'write', 'maintain', 'admin'}
+
+# Valid GitHub project permission levels
+VALID_PROJECT_PERMISSIONS = {'read', 'write', 'admin'}
 
 
 def load_yaml_file(file_path: str) -> Dict[str, Any]:
@@ -156,6 +159,284 @@ def validate_role_names(data: Dict[str, Any], file_path: str) -> ValidationResul
     )
 
 
+def _validate_required_field(
+    obj: Dict[str, Any],
+    field_name: str,
+    context: str,
+    file_path: str,
+    errors: List[str]
+) -> bool:
+    """Validate that a required field exists in a dictionary.
+    
+    Args:
+        obj: Dictionary to check
+        field_name: Name of required field
+        context: Context string for error message (e.g., "projects.organization_projects[0]")
+        file_path: Path to file (for error messages)
+        errors: List to append errors to
+        
+    Returns:
+        True if field exists, False otherwise
+    """
+    if field_name not in obj:
+        errors.append(f"{file_path}: {context} missing '{field_name}' field")
+        return False
+    return True
+
+
+def _validate_field_type(
+    value: Any,
+    expected_type: type,
+    field_name: str,
+    context: str,
+    file_path: str,
+    errors: List[str]
+) -> bool:
+    """Validate that a field has the expected type.
+    
+    Args:
+        value: Value to check
+        expected_type: Expected Python type
+        field_name: Name of field being validated
+        context: Context string for error message
+        file_path: Path to file (for error messages)
+        errors: List to append errors to
+        
+    Returns:
+        True if type matches, False otherwise
+    """
+    if not isinstance(value, expected_type):
+        type_name = expected_type.__name__
+        errors.append(f"{file_path}: {context}.{field_name} must be {type_name}")
+        return False
+    return True
+
+
+def _validate_positive_integer(
+    value: int,
+    field_name: str,
+    context: str,
+    file_path: str,
+    errors: List[str]
+) -> bool:
+    """Validate that an integer field is positive.
+    
+    Args:
+        value: Integer value to check
+        field_name: Name of field being validated
+        context: Context string for error message
+        file_path: Path to file (for error messages)
+        errors: List to append errors to
+        
+    Returns:
+        True if positive, False otherwise
+    """
+    if value <= 0:
+        errors.append(f"{file_path}: {context}.{field_name} must be positive")
+        return False
+    return True
+
+
+def _validate_non_empty_string(
+    value: str,
+    field_name: str,
+    context: str,
+    file_path: str,
+    errors: List[str]
+) -> bool:
+    """Validate that a string field is not empty.
+    
+    Args:
+        value: String value to check
+        field_name: Name of field being validated
+        context: Context string for error message
+        file_path: Path to file (for error messages)
+        errors: List to append errors to
+        
+    Returns:
+        True if non-empty, False otherwise
+    """
+    if not value.strip():
+        errors.append(f"{file_path}: {context}.{field_name} cannot be empty")
+        return False
+    return True
+
+
+def _validate_permission_value(
+    value: str,
+    valid_permissions: set,
+    field_name: str,
+    context: str,
+    file_path: str,
+    errors: List[str]
+) -> bool:
+    """Validate that a permission value is in the valid set.
+    
+    Args:
+        value: Permission value to check
+        valid_permissions: Set of valid permission strings
+        field_name: Name of field being validated
+        context: Context string for error message
+        file_path: Path to file (for error messages)
+        errors: List to append errors to
+        
+    Returns:
+        True if valid, False otherwise
+    """
+    if value.lower() not in valid_permissions:
+        errors.append(
+            f"{file_path}: {context}.{field_name} '{value}' invalid. "
+            f"Valid permissions: {', '.join(sorted(valid_permissions))}"
+        )
+        return False
+    return True
+
+
+def validate_project_config(data: Dict[str, Any], file_path: str) -> ValidationResult:
+    """Validate the projects section of team configuration.
+    
+    Args:
+        data: Parsed YAML data
+        file_path: Path to file (for error messages)
+        
+    Returns:
+        ValidationResult with errors for invalid project configuration
+    """
+    errors = []
+    warnings = []
+    
+    # Projects section is optional - if missing, that's fine (backward compatibility)
+    if 'projects' not in data:
+        return ValidationResult(valid=True, errors=[], warnings=[])
+    
+    projects = data['projects']
+    
+    # Validate projects is a dictionary
+    if not isinstance(projects, dict):
+        errors.append(f"{file_path}: 'projects' must be a dictionary")
+        return ValidationResult(valid=False, errors=errors, warnings=warnings)
+    
+    # Validate organization_projects if present
+    if 'organization_projects' in projects:
+        org_projects = projects['organization_projects']
+        if not isinstance(org_projects, list):
+            errors.append(f"{file_path}: projects.organization_projects must be a list")
+        else:
+            for i, proj in enumerate(org_projects):
+                context = f"projects.organization_projects[{i}]"
+                
+                if not isinstance(proj, dict):
+                    errors.append(f"{file_path}: {context} must be a dictionary")
+                    continue
+                
+                # Validate 'number' field
+                if _validate_required_field(proj, 'number', context, file_path, errors):
+                    if _validate_field_type(proj['number'], int, 'number', context, file_path, errors):
+                        _validate_positive_integer(proj['number'], 'number', context, file_path, errors)
+                
+                # Validate 'permission' field
+                if _validate_required_field(proj, 'permission', context, file_path, errors):
+                    if _validate_field_type(proj['permission'], str, 'permission', context, file_path, errors):
+                        _validate_permission_value(
+                            proj['permission'],
+                            VALID_PROJECT_PERMISSIONS,
+                            'permission',
+                            context,
+                            file_path,
+                            errors
+                        )
+    
+    # Validate repository_projects if present
+    if 'repository_projects' in projects:
+        repo_projects = projects['repository_projects']
+        if not isinstance(repo_projects, list):
+            errors.append(f"{file_path}: projects.repository_projects must be a list")
+        else:
+            for i, proj in enumerate(repo_projects):
+                context = f"projects.repository_projects[{i}]"
+                
+                if not isinstance(proj, dict):
+                    errors.append(f"{file_path}: {context} must be a dictionary")
+                    continue
+                
+                # Validate 'repository' field (required for repository projects)
+                if _validate_required_field(proj, 'repository', context, file_path, errors):
+                    if _validate_field_type(proj['repository'], str, 'repository', context, file_path, errors):
+                        _validate_non_empty_string(proj['repository'], 'repository', context, file_path, errors)
+                
+                # Validate 'number' field
+                if _validate_required_field(proj, 'number', context, file_path, errors):
+                    if _validate_field_type(proj['number'], int, 'number', context, file_path, errors):
+                        _validate_positive_integer(proj['number'], 'number', context, file_path, errors)
+                
+                # Validate 'permission' field
+                if _validate_required_field(proj, 'permission', context, file_path, errors):
+                    if _validate_field_type(proj['permission'], str, 'permission', context, file_path, errors):
+                        _validate_permission_value(
+                            proj['permission'],
+                            VALID_PROJECT_PERMISSIONS,
+                            'permission',
+                            context,
+                            file_path,
+                            errors
+                        )
+    
+    # Warn if projects section exists but is empty
+    if not projects.get('organization_projects') and not projects.get('repository_projects'):
+        warnings.append(f"{file_path}: 'projects' section is empty (no organization_projects or repository_projects)")
+    
+    return ValidationResult(
+        valid=len(errors) == 0,
+        errors=errors,
+        warnings=warnings
+    )
+
+
+def parse_project_configs(data: Dict[str, Any]) -> List[ProjectConfig]:
+    """Parse project configurations from YAML data.
+    
+    Args:
+        data: Parsed YAML data with optional 'projects' section
+        
+    Returns:
+        List of ProjectConfig objects
+    """
+    project_configs = []
+    
+    if 'projects' not in data:
+        return project_configs
+    
+    projects = data['projects']
+    
+    # Parse organization projects
+    if 'organization_projects' in projects:
+        for proj in projects['organization_projects']:
+            try:
+                project_configs.append(ProjectConfig(
+                    number=proj['number'],
+                    permission=proj['permission'],
+                    repository=None
+                ))
+            except (ValueError, KeyError) as e:
+                # Validation should have caught this, but be defensive
+                continue
+    
+    # Parse repository projects
+    if 'repository_projects' in projects:
+        for proj in projects['repository_projects']:
+            try:
+                project_configs.append(ProjectConfig(
+                    number=proj['number'],
+                    permission=proj['permission'],
+                    repository=proj['repository']
+                ))
+            except (ValueError, KeyError) as e:
+                # Validation should have caught this, but be defensive
+                continue
+    
+    return project_configs
+
+
 def load_team_configs(directory: str) -> tuple[List[TeamConfig], ValidationResult]:
     """Load all team configuration files from a directory.
     
@@ -215,11 +496,23 @@ def load_team_configs(directory: str) -> tuple[List[TeamConfig], ValidationResul
             if not role_result.valid:
                 continue  # Skip this file if roles are invalid
             
+            # Validate project configuration (optional section)
+            project_result = validate_project_config(data, str(yaml_file))
+            all_errors.extend(project_result.errors)
+            all_warnings.extend(project_result.warnings)
+            
+            if not project_result.valid:
+                continue  # Skip this file if projects are invalid
+            
+            # Parse project configurations
+            project_configs = parse_project_configs(data)
+            
             # Create TeamConfig object
             team_config = TeamConfig(
                 team_name=data['team_name'],
                 users=data['users'],
                 roles=data['roles'],
+                projects=project_configs,
                 source_file=str(yaml_file)
             )
             team_configs.append(team_config)

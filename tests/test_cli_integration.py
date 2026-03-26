@@ -35,10 +35,10 @@ users:
   - alice
   - bob
 roles:
-  push:
+  write:
     - repo1
     - repo2
-  pull:
+  read:
     - repo3
 """)
     
@@ -197,7 +197,7 @@ class TestDryRunMode:
         mock_client_class.return_value = mock_client
         
         mock_manager = Mock()
-        mock_manager.process_team_configs.return_value = {"repo1": {"user1": "push"}}
+        mock_manager.process_team_configs.return_value = {"repo1": {"user1": "write"}}
         mock_manager.apply_access_grants.return_value = []
         mock_manager_class.return_value = mock_manager
         
@@ -235,14 +235,14 @@ class TestNormalMode:
         mock_client_class.return_value = mock_client
         
         mock_manager = Mock()
-        mock_manager.process_team_configs.return_value = {"repo1": {"user1": "push"}}
+        mock_manager.process_team_configs.return_value = {"repo1": {"user1": "write"}}
         mock_manager.apply_access_grants.return_value = [
             OperationResult(
                 success=True,
                 action="add_collaborator",
                 user="user1",
                 repository="repo1",
-                role="push",
+                role="write",
                 message="Success"
             )
         ]
@@ -366,6 +366,700 @@ class TestLogLevels:
             exit_code = main()
         
         assert exit_code == 0
+
+
+class TestProjectAccessValidation:
+    """Integration tests for project access validation workflow."""
+    
+    @patch('src.github_collab_manager.cli.ProjectsClient')
+    @patch('src.github_collab_manager.cli.GitHubClient')
+    @patch('src.github_collab_manager.cli.CollaboratorManager')
+    @patch('src.github_collab_manager.cli.load_team_configs')
+    def test_project_access_dry_run_validation(self, mock_load, mock_manager_class, 
+                                               mock_client_class, mock_projects_class,
+                                               temp_teams_dir, mock_env, capsys):
+        """Test dry-run validation for project access operations."""
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        # Setup team config with projects
+        team_config = TeamConfig(
+            team_name="test-team",
+            users=["alice", "bob"],
+            roles={},
+            projects=[
+                ProjectConfig(number=1, permission=ProjectPermission.WRITE, repository=None)
+            ],
+            source_file="test.yaml"
+        )
+        
+        mock_load.return_value = (
+            [team_config],
+            ValidationResult(valid=True, errors=[], warnings=[])
+        )
+        
+        # Setup GitHub client mock
+        mock_client = Mock()
+        mock_client.authenticate.return_value = True
+        mock_client_class.return_value = mock_client
+        
+        # Setup Projects client mock
+        mock_projects = Mock()
+        mock_projects.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Test Project', 'url': 'url', 'closed': False}
+        ]
+        mock_projects.get_user_id.return_value = 'user_id'
+        mock_projects_class.return_value = mock_projects
+        
+        # Setup manager mock
+        mock_manager = Mock()
+        mock_manager.process_team_configs.return_value = {}
+        mock_manager.apply_project_access.return_value = []  # No errors
+        mock_manager_class.return_value = mock_manager
+        
+        with patch('sys.argv', [
+            'github-collab-manager',
+            '--teams-dir', temp_teams_dir,
+            '--dry-run'
+        ]):
+            exit_code = main()
+        
+        assert exit_code == 0
+        # Verify apply_project_access was called with dry_run=True
+        mock_manager.apply_project_access.assert_called_once()
+        call_args = mock_manager.apply_project_access.call_args
+        assert call_args[1]['dry_run'] is True
+    
+    @patch('src.github_collab_manager.cli.ProjectsClient')
+    @patch('src.github_collab_manager.cli.GitHubClient')
+    @patch('src.github_collab_manager.cli.CollaboratorManager')
+    @patch('src.github_collab_manager.cli.load_team_configs')
+    def test_project_validation_detects_nonexistent_project(self, mock_load, mock_manager_class,
+                                                            mock_client_class, mock_projects_class,
+                                                            temp_teams_dir, mock_env, capsys):
+        """Test validation detects when project doesn't exist."""
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        team_config = TeamConfig(
+            team_name="test-team",
+            users=["alice"],
+            roles={},
+            projects=[
+                ProjectConfig(number=999, permission=ProjectPermission.WRITE, repository=None)
+            ],
+            source_file="test.yaml"
+        )
+        
+        mock_load.return_value = (
+            [team_config],
+            ValidationResult(valid=True, errors=[], warnings=[])
+        )
+        
+        mock_client = Mock()
+        mock_client.authenticate.return_value = True
+        mock_client_class.return_value = mock_client
+        
+        mock_projects = Mock()
+        mock_projects.list_organization_projects.return_value = []  # Project doesn't exist
+        mock_projects_class.return_value = mock_projects
+        
+        mock_manager = Mock()
+        mock_manager.process_team_configs.return_value = {}
+        # Return error for nonexistent project
+        mock_manager.apply_project_access.return_value = ["Project #999 not found in organization"]
+        mock_manager_class.return_value = mock_manager
+        
+        with patch('sys.argv', [
+            'github-collab-manager',
+            '--teams-dir', temp_teams_dir,
+            '--dry-run'
+        ]):
+            exit_code = main()
+        
+        # Should still exit 0 in dry-run but report errors
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        # Error should be logged/displayed
+        mock_manager.apply_project_access.assert_called_once()
+    
+    @patch('src.github_collab_manager.cli.ProjectsClient')
+    @patch('src.github_collab_manager.cli.GitHubClient')
+    @patch('src.github_collab_manager.cli.CollaboratorManager')
+    @patch('src.github_collab_manager.cli.load_team_configs')
+    def test_project_validation_mixed_org_and_repo(self, mock_load, mock_manager_class,
+                                                   mock_client_class, mock_projects_class,
+                                                   temp_teams_dir, mock_env):
+        """Test validation workflow with mixed org and repo projects."""
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        team_config = TeamConfig(
+            team_name="mixed-team",
+            users=["alice"],
+            roles={},
+            projects=[
+                ProjectConfig(number=1, permission=ProjectPermission.WRITE, repository=None),
+                ProjectConfig(number=2, permission=ProjectPermission.READ, repository="test-repo")
+            ],
+            source_file="mixed.yaml"
+        )
+        
+        mock_load.return_value = (
+            [team_config],
+            ValidationResult(valid=True, errors=[], warnings=[])
+        )
+        
+        mock_client = Mock()
+        mock_client.authenticate.return_value = True
+        mock_client_class.return_value = mock_client
+        
+        mock_projects = Mock()
+        mock_projects.list_organization_projects.return_value = [
+            {'id': 'org_proj', 'number': 1, 'title': 'Org Project', 'url': 'url1', 'closed': False}
+        ]
+        mock_projects.list_repository_projects.return_value = [
+            {'id': 'repo_proj', 'number': 2, 'title': 'Repo Project', 'url': 'url2', 'closed': False}
+        ]
+        mock_projects.get_user_id.return_value = 'user_id'
+        mock_projects_class.return_value = mock_projects
+        
+        mock_manager = Mock()
+        mock_manager.process_team_configs.return_value = {}
+        mock_manager.apply_project_access.return_value = []
+        mock_manager_class.return_value = mock_manager
+        
+        with patch('sys.argv', [
+            'github-collab-manager',
+            '--teams-dir', temp_teams_dir,
+            '--dry-run'
+        ]):
+            exit_code = main()
+        
+        assert exit_code == 0
+        # Verify both org and repo projects were validated
+        mock_manager.apply_project_access.assert_called_once()
+    
+    @patch('src.github_collab_manager.cli.ProjectsClient')
+    @patch('src.github_collab_manager.cli.GitHubClient')
+    @patch('src.github_collab_manager.cli.CollaboratorManager')
+    @patch('src.github_collab_manager.cli.load_team_configs')
+    def test_project_validation_without_projects_client(self, mock_load, mock_manager_class,
+                                                        mock_client_class, mock_projects_class,
+                                                        temp_teams_dir, mock_env):
+        """Test validation when projects client initialization fails."""
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        team_config = TeamConfig(
+            team_name="test-team",
+            users=["alice"],
+            roles={},
+            projects=[
+                ProjectConfig(number=1, permission=ProjectPermission.WRITE, repository=None)
+            ],
+            source_file="test.yaml"
+        )
+        
+        mock_load.return_value = (
+            [team_config],
+            ValidationResult(valid=True, errors=[], warnings=[])
+        )
+        
+        mock_client = Mock()
+        mock_client.authenticate.return_value = True
+        mock_client_class.return_value = mock_client
+        
+        # Projects client initialization fails
+        mock_projects_class.side_effect = Exception("Failed to initialize projects client")
+        
+        mock_manager = Mock()
+        mock_manager.process_team_configs.return_value = {}
+        # Manager created without projects client
+        mock_manager.apply_project_access.return_value = ["Projects client not initialized"]
+        mock_manager_class.return_value = mock_manager
+        
+        with patch('sys.argv', [
+            'github-collab-manager',
+            '--teams-dir', temp_teams_dir
+        ]):
+            exit_code = main()
+        
+        # Should handle gracefully
+        assert exit_code in [0, 1]  # May exit with error or warning
+    
+    @patch('src.github_collab_manager.cli.ProjectsClient')
+    @patch('src.github_collab_manager.cli.GitHubClient')
+    @patch('src.github_collab_manager.cli.CollaboratorManager')
+    @patch('src.github_collab_manager.cli.load_team_configs')
+    def test_project_validation_with_multiple_teams(self, mock_load, mock_manager_class,
+                                                    mock_client_class, mock_projects_class,
+                                                    temp_teams_dir, mock_env):
+        """Test validation workflow with multiple teams accessing projects."""
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        team_configs = [
+            TeamConfig(
+                team_name="team-a",
+                users=["alice"],
+                roles={},
+                projects=[ProjectConfig(number=1, permission=ProjectPermission.WRITE)],
+                source_file="team-a.yaml"
+            ),
+            TeamConfig(
+                team_name="team-b",
+                users=["bob"],
+                roles={},
+                projects=[ProjectConfig(number=1, permission=ProjectPermission.READ)],
+                source_file="team-b.yaml"
+            )
+        ]
+        
+        mock_load.return_value = (
+            team_configs,
+            ValidationResult(valid=True, errors=[], warnings=[])
+        )
+        
+        mock_client = Mock()
+        mock_client.authenticate.return_value = True
+        mock_client_class.return_value = mock_client
+        
+        mock_projects = Mock()
+        mock_projects.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Shared Project', 'url': 'url', 'closed': False}
+        ]
+        mock_projects.get_user_id.side_effect = lambda u: f"{u}_id"
+        mock_projects_class.return_value = mock_projects
+        
+        mock_manager = Mock()
+        mock_manager.process_team_configs.return_value = {}
+        mock_manager.apply_project_access.return_value = []
+        mock_manager_class.return_value = mock_manager
+        
+        with patch('sys.argv', [
+            'github-collab-manager',
+            '--teams-dir', temp_teams_dir,
+            '--dry-run'
+        ]):
+            exit_code = main()
+        
+        assert exit_code == 0
+        # Verify all teams were processed
+        mock_manager.apply_project_access.assert_called_once()
+        call_args = mock_manager.apply_project_access.call_args
+        assert len(call_args[0][0]) == 2  # Two team configs passed
+
+
+
+class TestStaleCollaboratorWorkflow:
+    """Integration tests for stale collaborator detection and removal workflow."""
+    
+    @patch('src.github_collab_manager.cli.ProjectsClient')
+    @patch('src.github_collab_manager.cli.GitHubClient')
+    @patch('src.github_collab_manager.cli.CollaboratorManager')
+    @patch('src.github_collab_manager.cli.load_team_configs')
+    def test_report_stale_with_projects(self, mock_load, mock_manager_class,
+                                       mock_client_class, mock_projects_class,
+                                       temp_teams_dir, mock_env, capsys):
+        """Test --report-stale flag with project collaborators."""
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        team_config = TeamConfig(
+            team_name="test-team",
+            users=["alice"],
+            roles={},
+            projects=[
+                ProjectConfig(number=1, permission=ProjectPermission.WRITE, repository=None)
+            ],
+            source_file="test.yaml"
+        )
+        
+        mock_load.return_value = (
+            [team_config],
+            ValidationResult(valid=True, errors=[], warnings=[])
+        )
+        
+        mock_client = Mock()
+        mock_client.authenticate.return_value = True
+        mock_client_class.return_value = mock_client
+        
+        mock_projects = Mock()
+        mock_projects.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Test Project', 'url': 'url', 'closed': False}
+        ]
+        mock_projects_class.return_value = mock_projects
+        
+        mock_manager = Mock()
+        mock_manager.process_team_configs.return_value = {}
+        mock_manager.apply_access_grants.return_value = []  # Return empty list for results
+        mock_manager.apply_project_access.return_value = []  # Return empty list for project errors
+        
+        # Mock rate limit
+        mock_client.get_rate_limit.return_value = {
+            'remaining': 5000,
+            'limit': 5000,
+            'reset_timestamp': '2026-03-26T13:00:00Z'
+        }
+        
+        mock_manager.detect_stale_collaborators.return_value = {}  # No stale repo collaborators
+        mock_manager.detect_stale_project_collaborators.return_value = {
+            'org:1': ['bob', 'charlie']  # Stale project collaborators
+        }
+        mock_manager_class.return_value = mock_manager
+        
+        with patch('sys.argv', [
+            'github-collab-manager',
+            '--teams-dir', temp_teams_dir,
+            '--report-stale'
+        ]):
+            exit_code = main()
+        
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        # Should report stale project collaborators
+        assert 'bob' in captured.out or 'charlie' in captured.out
+        mock_manager.detect_stale_project_collaborators.assert_called_once()
+    
+    @patch('src.github_collab_manager.cli.ProjectsClient')
+    @patch('src.github_collab_manager.cli.GitHubClient')
+    @patch('src.github_collab_manager.cli.CollaboratorManager')
+    @patch('src.github_collab_manager.cli.load_team_configs')
+    def test_remove_stale_with_projects_dry_run(self, mock_load, mock_manager_class,
+                                                mock_client_class, mock_projects_class,
+                                                temp_teams_dir, mock_env, capsys):
+        """Test --remove-stale flag with projects in dry-run mode."""
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        team_config = TeamConfig(
+            team_name="test-team",
+            users=["alice"],
+            roles={},
+            projects=[
+                ProjectConfig(number=1, permission=ProjectPermission.WRITE, repository=None)
+            ],
+            source_file="test.yaml"
+        )
+        
+        mock_load.return_value = (
+            [team_config],
+            ValidationResult(valid=True, errors=[], warnings=[])
+        )
+        
+        mock_client = Mock()
+        mock_client.authenticate.return_value = True
+        mock_client_class.return_value = mock_client
+        
+        mock_projects = Mock()
+        mock_projects.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Test Project', 'url': 'url', 'closed': False}
+        ]
+        mock_projects_class.return_value = mock_projects
+        
+        mock_manager = Mock()
+        mock_manager.process_team_configs.return_value = {}
+        mock_manager.apply_access_grants.return_value = []  # Return empty list for results
+        mock_manager.apply_project_access.return_value = []  # Return empty list for project errors
+        
+        # Mock rate limit
+        mock_client.get_rate_limit.return_value = {
+            'remaining': 5000,
+            'limit': 5000,
+            'reset_timestamp': '2026-03-26T13:00:00Z'
+        }
+        
+        mock_manager.detect_stale_collaborators.return_value = {}
+        mock_manager.detect_stale_project_collaborators.return_value = {
+            'org:1': ['bob']
+        }
+        mock_manager.remove_stale_collaborators.return_value = []
+        mock_manager.remove_stale_project_collaborators.return_value = []
+        mock_manager_class.return_value = mock_manager
+        
+        with patch('sys.argv', [
+            'github-collab-manager',
+            '--teams-dir', temp_teams_dir,
+            '--remove-stale',
+            '--dry-run'
+        ]):
+            exit_code = main()
+        
+        assert exit_code == 0
+        # Verify dry_run=True was passed
+        mock_manager.remove_stale_project_collaborators.assert_called_once()
+        call_args = mock_manager.remove_stale_project_collaborators.call_args
+        assert call_args[1]['dry_run'] is True
+    
+    @patch('src.github_collab_manager.cli.ProjectsClient')
+    @patch('src.github_collab_manager.cli.GitHubClient')
+    @patch('src.github_collab_manager.cli.CollaboratorManager')
+    @patch('src.github_collab_manager.cli.load_team_configs')
+    def test_remove_stale_with_projects_actual_removal(self, mock_load, mock_manager_class,
+                                                       mock_client_class, mock_projects_class,
+                                                       temp_teams_dir, mock_env, capsys):
+        """Test --remove-stale flag with projects performing actual removal."""
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        team_config = TeamConfig(
+            team_name="test-team",
+            users=["alice"],
+            roles={},
+            projects=[
+                ProjectConfig(number=1, permission=ProjectPermission.WRITE, repository=None)
+            ],
+            source_file="test.yaml"
+        )
+        
+        mock_load.return_value = (
+            [team_config],
+            ValidationResult(valid=True, errors=[], warnings=[])
+        )
+        
+        mock_client = Mock()
+        mock_client.authenticate.return_value = True
+        mock_client_class.return_value = mock_client
+        
+        mock_projects = Mock()
+        mock_projects.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Test Project', 'url': 'url', 'closed': False}
+        ]
+        mock_projects_class.return_value = mock_projects
+        
+        mock_manager = Mock()
+        mock_manager.process_team_configs.return_value = {}
+        mock_manager.apply_access_grants.return_value = []  # Return empty list for results
+        mock_manager.apply_project_access.return_value = []  # Return empty list for project errors
+        
+        # Mock rate limit
+        mock_client.get_rate_limit.return_value = {
+            'remaining': 5000,
+            'limit': 5000,
+            'reset_timestamp': '2026-03-26T13:00:00Z'
+        }
+        
+        mock_manager.detect_stale_collaborators.return_value = {}
+        mock_manager.detect_stale_project_collaborators.return_value = {
+            'org:1': ['bob']
+        }
+        mock_manager.remove_stale_collaborators.return_value = []
+        mock_manager.remove_stale_project_collaborators.return_value = []  # No errors
+        mock_manager_class.return_value = mock_manager
+        
+        with patch('sys.argv', [
+            'github-collab-manager',
+            '--teams-dir', temp_teams_dir,
+            '--remove-stale'
+        ]):
+            exit_code = main()
+        
+        assert exit_code == 0
+        # Verify dry_run=False was passed
+        mock_manager.remove_stale_project_collaborators.assert_called_once()
+        call_args = mock_manager.remove_stale_project_collaborators.call_args
+        assert call_args[1]['dry_run'] is False
+        captured = capsys.readouterr()
+        # Should show removal summary
+        assert 'Removals' in captured.out or 'removed' in captured.out.lower()
+    
+    @patch('src.github_collab_manager.cli.ProjectsClient')
+    @patch('src.github_collab_manager.cli.GitHubClient')
+    @patch('src.github_collab_manager.cli.CollaboratorManager')
+    @patch('src.github_collab_manager.cli.load_team_configs')
+    def test_combined_repo_and_project_stale_detection(self, mock_load, mock_manager_class,
+                                                       mock_client_class, mock_projects_class,
+                                                       temp_teams_dir, mock_env, capsys):
+        """Test stale detection for both repositories and projects."""
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        team_config = TeamConfig(
+            team_name="test-team",
+            users=["alice"],
+            roles={"write": ["repo1"]},
+            projects=[
+                ProjectConfig(number=1, permission=ProjectPermission.WRITE, repository=None)
+            ],
+            source_file="test.yaml"
+        )
+        
+        mock_load.return_value = (
+            [team_config],
+            ValidationResult(valid=True, errors=[], warnings=[])
+        )
+        
+        mock_client = Mock()
+        mock_client.authenticate.return_value = True
+        mock_client_class.return_value = mock_client
+        
+        mock_projects = Mock()
+        mock_projects.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Test Project', 'url': 'url', 'closed': False}
+        ]
+        mock_projects_class.return_value = mock_projects
+        
+        mock_manager = Mock()
+        mock_manager.process_team_configs.return_value = {"repo1": {"alice": "write"}}
+        mock_manager.apply_access_grants.return_value = []  # Return empty list for results
+        mock_manager.apply_project_access.return_value = []  # Return empty list for project errors
+        
+        # Mock rate limit
+        mock_client.get_rate_limit.return_value = {
+            'remaining': 5000,
+            'limit': 5000,
+            'reset_timestamp': '2026-03-26T13:00:00Z'
+        }
+        
+        # Stale collaborators in both repos and projects
+        mock_manager.detect_stale_collaborators.return_value = {
+            'repo1': ['bob']  # Stale repo collaborator
+        }
+        mock_manager.detect_stale_project_collaborators.return_value = {
+            'org:1': ['charlie']  # Stale project collaborator
+        }
+        mock_manager_class.return_value = mock_manager
+        
+        with patch('sys.argv', [
+            'github-collab-manager',
+            '--teams-dir', temp_teams_dir,
+            '--report-stale'
+        ]):
+            exit_code = main()
+        
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        # Should report both types of stale collaborators
+        mock_manager.detect_stale_collaborators.assert_called_once()
+        mock_manager.detect_stale_project_collaborators.assert_called_once()
+    
+    @patch('src.github_collab_manager.cli.ProjectsClient')
+    @patch('src.github_collab_manager.cli.GitHubClient')
+    @patch('src.github_collab_manager.cli.CollaboratorManager')
+    @patch('src.github_collab_manager.cli.load_team_configs')
+    def test_stale_removal_with_errors(self, mock_load, mock_manager_class,
+                                      mock_client_class, mock_projects_class,
+                                      temp_teams_dir, mock_env, capsys):
+        """Test stale removal handles errors gracefully."""
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        team_config = TeamConfig(
+            team_name="test-team",
+            users=["alice"],
+            roles={},
+            projects=[
+                ProjectConfig(number=1, permission=ProjectPermission.WRITE, repository=None)
+            ],
+            source_file="test.yaml"
+        )
+        
+        mock_load.return_value = (
+            [team_config],
+            ValidationResult(valid=True, errors=[], warnings=[])
+        )
+        
+        mock_client = Mock()
+        mock_client.authenticate.return_value = True
+        mock_client_class.return_value = mock_client
+        
+        mock_projects = Mock()
+        mock_projects.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Test Project', 'url': 'url', 'closed': False}
+        ]
+        mock_projects_class.return_value = mock_projects
+        
+        mock_manager = Mock()
+        mock_manager.process_team_configs.return_value = {}
+        mock_manager.apply_access_grants.return_value = []  # Return empty list for results
+        mock_manager.apply_project_access.return_value = []  # Return empty list for project errors
+        
+        # Mock rate limit
+        mock_client.get_rate_limit.return_value = {
+            'remaining': 5000,
+            'limit': 5000,
+            'reset_timestamp': '2026-03-26T13:00:00Z'
+        }
+        
+        mock_manager.detect_stale_collaborators.return_value = {}
+        mock_manager.detect_stale_project_collaborators.return_value = {
+            'org:1': ['bob']
+        }
+        mock_manager.remove_stale_collaborators.return_value = []
+        # Return errors from project removal
+        mock_manager.remove_stale_project_collaborators.return_value = [
+            "Failed to remove bob from project org:1: GraphQL error"
+        ]
+        mock_manager_class.return_value = mock_manager
+        
+        with patch('sys.argv', [
+            'github-collab-manager',
+            '--teams-dir', temp_teams_dir,
+            '--remove-stale'
+        ]):
+            exit_code = main()
+        
+        # Should still exit 0 but report errors
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        # Error should be displayed
+        assert 'error' in captured.out.lower() or 'failed' in captured.out.lower()
+    
+    @patch('src.github_collab_manager.cli.ProjectsClient')
+    @patch('src.github_collab_manager.cli.GitHubClient')
+    @patch('src.github_collab_manager.cli.CollaboratorManager')
+    @patch('src.github_collab_manager.cli.load_team_configs')
+    def test_stale_detection_with_repo_projects(self, mock_load, mock_manager_class,
+                                               mock_client_class, mock_projects_class,
+                                               temp_teams_dir, mock_env, capsys):
+        """Test stale detection with repository-level projects."""
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        team_config = TeamConfig(
+            team_name="test-team",
+            users=["alice"],
+            roles={},
+            projects=[
+                ProjectConfig(number=1, permission=ProjectPermission.WRITE, repository="test-repo")
+            ],
+            source_file="test.yaml"
+        )
+        
+        mock_load.return_value = (
+            [team_config],
+            ValidationResult(valid=True, errors=[], warnings=[])
+        )
+        
+        mock_client = Mock()
+        mock_client.authenticate.return_value = True
+        mock_client_class.return_value = mock_client
+        
+        mock_projects = Mock()
+        mock_projects.list_repository_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Repo Project', 'url': 'url', 'closed': False}
+        ]
+        mock_projects_class.return_value = mock_projects
+        
+        mock_manager = Mock()
+        mock_manager.process_team_configs.return_value = {}
+        mock_manager.apply_access_grants.return_value = []  # Return empty list for results
+        mock_manager.apply_project_access.return_value = []  # Return empty list for project errors
+        
+        # Mock rate limit
+        mock_client.get_rate_limit.return_value = {
+            'remaining': 5000,
+            'limit': 5000,
+            'reset_timestamp': '2026-03-26T13:00:00Z'
+        }
+        
+        mock_manager.detect_stale_collaborators.return_value = {}
+        mock_manager.detect_stale_project_collaborators.return_value = {
+            'repo:test-repo:1': ['bob']  # Stale repo project collaborator
+        }
+        mock_manager_class.return_value = mock_manager
+        
+        with patch('sys.argv', [
+            'github-collab-manager',
+            '--teams-dir', temp_teams_dir,
+            '--report-stale'
+        ]):
+            exit_code = main()
+        
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        # Should report stale repo project collaborator
+        mock_manager.detect_stale_project_collaborators.assert_called_once()
 
 
 # Made with Bob

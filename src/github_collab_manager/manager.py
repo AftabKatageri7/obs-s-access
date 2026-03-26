@@ -1,29 +1,34 @@
-"""Collaborator management logic for GitHub repositories.
+"""Collaborator management logic for GitHub repositories and projects.
 
 This module handles the business logic for processing team configurations,
-resolving conflicts, detecting changes, and applying access grants.
+resolving conflicts, detecting changes, and applying access grants to both
+repositories and GitHub Projects v2.
 """
 
-from typing import List, Dict, Set, Tuple
+from typing import List, Dict, Set, Tuple, Optional
 from collections import defaultdict
 
-from .models import TeamConfig, AccessGrant, OperationResult
+from .models import TeamConfig, AccessGrant, OperationResult, ProjectConfig
 from .github_client import GitHubClient
+from .projects_client import ProjectsClient
 from .audit_logger import AuditLogger
 
 
 class CollaboratorManager:
-    """Manages collaborator access across GitHub repositories."""
+    """Manages collaborator access across GitHub repositories and projects."""
     
-    def __init__(self, github_client: GitHubClient, logger: AuditLogger):
+    def __init__(self, github_client: GitHubClient, logger: AuditLogger,
+                 projects_client: Optional[ProjectsClient] = None):
         """Initialize collaborator manager.
         
         Args:
             github_client: Authenticated GitHub client
             logger: Audit logger instance
+            projects_client: Optional GitHub Projects v2 client for project access management
         """
         self.github_client = github_client
         self.logger = logger
+        self.projects_client = projects_client
     
     def process_team_configs(self, team_configs: List[TeamConfig]) -> Dict[str, Dict[str, str]]:
         """Process team configurations and resolve conflicts.
@@ -466,5 +471,428 @@ class CollaboratorManager:
         )
         
         return results
+    
+    def apply_project_access(self, team_configs: List[TeamConfig],
+                            organization: str, dry_run: bool = False) -> List[str]:
+        """Apply project access grants from team configurations.
+        
+        Args:
+            team_configs: List of TeamConfig objects with project definitions
+            organization: Organization name
+            dry_run: If True, only log planned changes without applying
+            
+        Returns:
+            List of error messages (empty if all successful)
+        """
+        if not self.projects_client:
+            self.logger.log_warning("Projects client not initialized - skipping project access")
+            return ["Projects client not initialized"]
+        
+        errors = []
+        
+        # Sort team configs by source file (alphabetical order for deterministic processing)
+        sorted_configs = sorted(team_configs, key=lambda tc: tc.source_file)
+        
+        # Count total project grants to process
+        total_grants = sum(
+            len(tc.users) * len(tc.projects)
+            for tc in sorted_configs
+            if tc.projects
+        )
+        
+        if total_grants == 0:
+            self.logger.log_info("No project access grants to process")
+            return errors
+        
+        self.logger.log_info(
+            f"{'[DRY RUN] ' if dry_run else ''}Processing {total_grants} project access grant(s) from {len(sorted_configs)} team(s)",
+            dry_run=dry_run,
+            total_grants=total_grants,
+            team_count=len(sorted_configs)
+        )
+        
+        # Process each team configuration
+        for team_config in sorted_configs:
+            if not team_config.projects:
+                continue
+            
+            self.logger.log_debug(
+                f"Processing project access for team '{team_config.team_name}'",
+                team_name=team_config.team_name,
+                source_file=team_config.source_file,
+                project_count=len(team_config.projects),
+                user_count=len(team_config.users)
+            )
+            
+            # Process each project in the team configuration
+            for project_config in team_config.projects:
+                # Determine project type and fetch project list
+                project_type = "unknown"  # Initialize to handle errors before type is determined
+                try:
+                    if project_config.repository:
+                        # Repository-level project
+                        projects = self.projects_client.list_repository_projects(
+                            organization, project_config.repository
+                        )
+                        project_type = "repository"
+                    else:
+                        # Organization-level project
+                        projects = self.projects_client.list_organization_projects(organization)
+                        project_type = "organization"
+                    
+                    # Find the specific project by number
+                    project = next(
+                        (p for p in projects if p['number'] == project_config.number),
+                        None
+                    )
+                    
+                    if not project:
+                        error_msg = (
+                            f"Project #{project_config.number} not found in "
+                            f"{'repository ' + project_config.repository if project_config.repository else 'organization'}"
+                        )
+                        errors.append(error_msg)
+                        self.logger.log_error(
+                            error_msg,
+                            project_number=project_config.number,
+                            project_type=project_type,
+                            repository=project_config.repository,
+                            team_name=team_config.team_name
+                        )
+                        continue
+                    
+                    # Note: GitHub Projects v2 API doesn't expose collaborators list
+                    # We'll attempt to grant/update access for all users
+                    # The API will handle whether it's an add or update
+                    
+                    # Grant access to each user in the team
+                    for username in team_config.users:
+                        try:
+                            desired_permission = project_config.permission.value.upper()
+                            
+                            # Get user ID (required for GraphQL mutations)
+                            user_id = self.projects_client.get_user_id(username)
+                            
+                            if dry_run:
+                                # Dry run - just log the planned operation
+                                self.logger.log_info(
+                                    f"[DRY RUN] Would grant {username} {desired_permission} access on project #{project['number']}",
+                                    action="grant_project_access_dry_run",
+                                    user=username,
+                                    project_number=project['number'],
+                                    permission=desired_permission,
+                                    project_type=project_type,
+                                    repository=project_config.repository
+                                )
+                            else:
+                                # Actually grant/update project access
+                                self.projects_client.update_project_collaborator(
+                                    project['id'],
+                                    user_id,
+                                    desired_permission
+                                )
+                                
+                                # Log successful operation
+                                self.logger.log_project_operation(
+                                    action="grant_project_access",
+                                    user=username,
+                                    organization=organization,
+                                    project_number=project['number'],
+                                    permission=desired_permission,
+                                    result="success",
+                                    message=f"Granted {username} {desired_permission} access to project #{project['number']}",
+                                    source_team=team_config.team_name,
+                                    source_file=team_config.source_file,
+                                    project_type=project_type,
+                                    project_repository=project_config.repository
+                                )
+                        
+                        except Exception as e:
+                            error_msg = (
+                                f"Failed to grant {username} access to project #{project_config.number}: {e}"
+                            )
+                            errors.append(error_msg)
+                            self.logger.log_error(
+                                error_msg,
+                                error=e,
+                                user=username,
+                                project_number=project_config.number,
+                                permission=project_config.permission.value,
+                                project_type=project_type,
+                                repository=project_config.repository
+                            )
+                
+                except Exception as e:
+                    error_msg = (
+                        f"Failed to process project #{project_config.number}: {e}"
+                    )
+                    errors.append(error_msg)
+                    self.logger.log_error(
+                        error_msg,
+                        error=e,
+                        project_number=project_config.number,
+                        project_type=project_type,
+                        repository=project_config.repository
+                    )
+        # Summary
+        success_count = total_grants - len(errors)
+        self.logger.log_info(
+            f"{'[DRY RUN] ' if dry_run else ''}Project access processing complete: "
+            f"{success_count} successful, {len(errors)} failed",
+            dry_run=dry_run,
+            total=total_grants,
+            success=success_count,
+            failure=len(errors)
+        )
+        
+        return errors
+        
+    
+    def detect_stale_project_collaborators(self, team_configs: List[TeamConfig],
+                                          organization: str) -> Dict[str, List[str]]:
+        """Detect project collaborators not defined in any team configuration.
+        
+        Args:
+            team_configs: List of TeamConfig objects with project definitions
+            organization: Organization name
+            
+        Returns:
+            Dictionary mapping project identifier -> list of stale usernames
+            Project identifier format: "org:PROJECT_NUMBER" or "repo:REPO_NAME:PROJECT_NUMBER"
+        """
+        if not self.projects_client:
+            self.logger.log_warning("Projects client not initialized - skipping stale project detection")
+            return {}
+        
+        stale_collaborators = {}
+        
+        # Build desired project access map from team configs
+        # Key: project identifier -> set of desired usernames
+        desired_project_access: Dict[str, Set[str]] = defaultdict(set)
+        
+        for team_config in team_configs:
+            if not team_config.projects:
+                continue
+            
+            for project_config in team_config.projects:
+                # Create project identifier
+                if project_config.repository:
+                    project_id = f"repo:{project_config.repository}:{project_config.number}"
+                else:
+                    project_id = f"org:{project_config.number}"
+                
+                # Add all team users to desired set for this project
+                desired_project_access[project_id].update(team_config.users)
+        
+        if not desired_project_access:
+            self.logger.log_info("No project access configurations found - skipping stale detection")
+            return stale_collaborators
+        
+        self.logger.log_info(
+            f"Detecting stale project collaborators across {len(desired_project_access)} project(s)",
+            project_count=len(desired_project_access)
+        )
+        
+        # Check each project for stale collaborators
+        for project_id, desired_users in desired_project_access.items():
+            try:
+                # Parse project identifier
+                if project_id.startswith("org:"):
+                    project_number = int(project_id.split(":")[1])
+                    repository = None
+                    projects = self.projects_client.list_organization_projects(organization)
+                    project_type = "organization"
+                else:  # repo:REPO_NAME:PROJECT_NUMBER
+                    parts = project_id.split(":", 2)
+                    repository = parts[1]
+                    project_number = int(parts[2])
+                    projects = self.projects_client.list_repository_projects(organization, repository)
+                    project_type = "repository"
+                
+                # Find the specific project
+                project = next(
+                    (p for p in projects if p['number'] == project_number),
+                    None
+                )
+                
+                if not project:
+                    self.logger.log_warning(
+                        f"Project #{project_number} not found - skipping stale detection",
+                        project_number=project_number,
+                        project_type=project_type,
+                        repository=repository
+                    )
+                    continue
+                
+                # Get current project collaborators
+                current_collaborators = self.projects_client.get_project_collaborators(project['id'])
+                
+                if current_collaborators is None:
+                    self.logger.log_warning(
+                        f"Failed to list collaborators for project #{project_number} - skipping",
+                        project_number=project_number,
+                        project_type=project_type,
+                        repository=repository
+                    )
+                    continue
+                
+                # Find collaborators not in desired set
+                current_usernames = {collab['login'] for collab in current_collaborators}
+                stale = current_usernames - desired_users
+                
+                # Filter out organization members (they may have implicit access)
+                filtered_stale = self._filter_org_members(stale)
+                
+                if filtered_stale:
+                    stale_collaborators[project_id] = sorted(filtered_stale)
+                    self.logger.log_info(
+                        f"Found {len(filtered_stale)} stale collaborator(s) in project #{project_number}",
+                        project_number=project_number,
+                        project_type=project_type,
+                        repository=repository,
+                        stale_count=len(filtered_stale),
+                        stale_users=sorted(filtered_stale)
+                    )
+            
+            except Exception as e:
+                self.logger.log_error(
+                    f"Error detecting stale collaborators for project {project_id}: {e}",
+                    project_id=project_id,
+                    error=e
+                )
+        
+        total_stale = sum(len(users) for users in stale_collaborators.values())
+        self.logger.log_info(
+            f"Stale project collaborator detection complete: {total_stale} total across {len(stale_collaborators)} projects",
+            total_stale=total_stale,
+            affected_projects=len(stale_collaborators)
+        )
+        
+        return stale_collaborators
+    
+    def remove_stale_project_collaborators(self, stale_collaborators: Dict[str, List[str]],
+                                          organization: str, dry_run: bool = False) -> List[str]:
+        """Remove stale collaborators from projects.
+        
+        Args:
+            stale_collaborators: Dictionary mapping project identifier -> list of stale usernames
+            organization: Organization name
+            dry_run: If True, only log planned removals without applying
+            
+        Returns:
+            List of error messages (empty if all successful)
+        """
+        if not self.projects_client:
+            self.logger.log_warning("Projects client not initialized - skipping stale project removal")
+            return ["Projects client not initialized"]
+        
+        errors = []
+        total_removals = sum(len(users) for users in stale_collaborators.values())
+        
+        self.logger.log_info(
+            f"{'[DRY RUN] ' if dry_run else ''}Removing {total_removals} stale project collaborator(s) from {len(stale_collaborators)} project(s)",
+            dry_run=dry_run,
+            total_removals=total_removals,
+            project_count=len(stale_collaborators)
+        )
+        
+        for project_id, usernames in stale_collaborators.items():
+            try:
+                # Parse project identifier
+                if project_id.startswith("org:"):
+                    project_number = int(project_id.split(":")[1])
+                    repository = None
+                    projects = self.projects_client.list_organization_projects(organization)
+                    project_type = "organization"
+                else:  # repo:REPO_NAME:PROJECT_NUMBER
+                    parts = project_id.split(":", 2)
+                    repository = parts[1]
+                    project_number = int(parts[2])
+                    projects = self.projects_client.list_repository_projects(organization, repository)
+                    project_type = "repository"
+                
+                # Find the specific project
+                project = next(
+                    (p for p in projects if p['number'] == project_number),
+                    None
+                )
+                
+                if not project:
+                    error_msg = f"Project #{project_number} not found - cannot remove stale collaborators"
+                    errors.append(error_msg)
+                    self.logger.log_error(
+                        error_msg,
+                        project_number=project_number,
+                        project_type=project_type,
+                        repository=repository
+                    )
+                    continue
+                
+                # Remove each stale collaborator
+                for username in usernames:
+                    try:
+                        # Get user ID (required for GraphQL mutations)
+                        user_id = self.projects_client.get_user_id(username)
+                        
+                        if dry_run:
+                            # Dry run - just log the planned removal
+                            self.logger.log_info(
+                                f"[DRY RUN] Would remove {username} from project #{project_number}",
+                                action="remove_project_collaborator_dry_run",
+                                user=username,
+                                project_number=project_number,
+                                project_type=project_type,
+                                repository=repository
+                            )
+                        else:
+                            # Actually remove the collaborator
+                            self.projects_client.remove_project_collaborator(project['id'], user_id)
+                            
+                            # Log successful operation
+                            self.logger.log_project_operation(
+                                action="remove_project_collaborator",
+                                user=username,
+                                organization=organization,
+                                project_number=project_number,
+                                permission="",  # Not relevant for removal
+                                result="success",
+                                message=f"Removed {username} from project #{project_number}",
+                                project_type=project_type,
+                                project_repository=repository
+                            )
+                    
+                    except Exception as e:
+                        error_msg = f"Failed to remove {username} from project #{project_number}: {e}"
+                        errors.append(error_msg)
+                        self.logger.log_error(
+                            error_msg,
+                            error=e,
+                            user=username,
+                            project_number=project_number,
+                            project_type=project_type,
+                            repository=repository
+                        )
+            
+            except Exception as e:
+                error_msg = f"Error processing project {project_id}: {e}"
+                errors.append(error_msg)
+                self.logger.log_error(
+                    error_msg,
+                    error=e,
+                    project_id=project_id
+                )
+        
+        # Summary
+        success_count = total_removals - len(errors)
+        self.logger.log_info(
+            f"{'[DRY RUN] ' if dry_run else ''}Stale project collaborator removal complete: "
+            f"{success_count} successful, {len(errors)} failed",
+            dry_run=dry_run,
+            total=total_removals,
+            success=success_count,
+            failure=len(errors)
+        )
+        
+        return errors
 
 # Made with Bob

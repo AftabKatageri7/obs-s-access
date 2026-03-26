@@ -17,7 +17,7 @@ from typing import List
 import pytest
 from unittest.mock import Mock, MagicMock, call
 
-from github_collab_manager.config_loader import ConfigLoader
+from github_collab_manager.config_loader import load_team_configs
 from github_collab_manager.manager import CollaboratorManager
 from github_collab_manager.audit_logger import AuditLogger
 from github_collab_manager.models import TeamConfig, RepositoryPermission, CollaboratorInfo
@@ -52,11 +52,11 @@ engineering-team:
     - diana-dev
   repositories:
     - repo: observability-s/core-service
-      permission: push
+      permission: write
     - repo: observability-s/api-gateway
-      permission: push
+      permission: write
     - repo: observability-s/frontend
-      permission: push
+      permission: write
 """)
         
         # Create operations team config
@@ -78,9 +78,9 @@ on-call:
     - charlie-dev
   repositories:
     - repo: observability-s/core-service
-      permission: push
+      permission: write
     - repo: observability-s/monitoring
-      permission: push
+      permission: write
 """)
         
         return configs_dir
@@ -95,13 +95,13 @@ on-call:
             existing = {
                 "observability-s/core-service": [
                     CollaboratorInfo(username="alice-eng", permission="admin"),
-                    CollaboratorInfo(username="old-dev", permission="push"),  # Stale
+                    CollaboratorInfo(username="old-dev", permission="write"),  # Stale
                 ],
                 "observability-s/api-gateway": [
-                    CollaboratorInfo(username="bob-eng", permission="push"),  # Needs update
+                    CollaboratorInfo(username="bob-eng", permission="write"),  # Needs update
                 ],
                 "observability-s/frontend": [
-                    CollaboratorInfo(username="stale-contractor", permission="pull"),  # Stale
+                    CollaboratorInfo(username="stale-contractor", permission="read"),  # Stale
                 ],
                 "observability-s/infrastructure": [],
                 "observability-s/monitoring": [
@@ -128,15 +128,14 @@ on-call:
         """Test complete workflow: load configs, plan changes, apply without stale removal."""
         # Setup
         logger = AuditLogger(str(audit_log_file))
-        loader = ConfigLoader()
         manager = CollaboratorManager(mock_github_client, logger)
         
         # Load all configuration files
-        config_files = [str(f) for f in sample_configs_dir.glob("*.yaml")]
-        configs = loader.load_configs(config_files)
+        configs, validation_result = load_team_configs(str(sample_configs_dir))
         
-        # Verify configurations loaded
-        assert len(configs) == 4  # 2 roles from engineering + 2 roles from operations
+        # Verify configurations loaded successfully
+        assert validation_result.valid, f"Config validation failed: {validation_result.errors}"
+        assert len(configs) == 2  # 2 config files: engineering.yaml and operations.yaml
         
         # Plan changes without removing stale collaborators
         plan = manager.plan_changes(configs, remove_stale=False)
@@ -335,7 +334,7 @@ on-call:
             
             for repo_perm in config.repositories:
                 assert repo_perm.repo is not None
-                assert repo_perm.permission in ["pull", "push", "admin"]
+                assert repo_perm.permission in ["read", "write", "admin"]
 
     def test_operation_summary_reporting(
         self, sample_configs_dir, mock_github_client, audit_log_file

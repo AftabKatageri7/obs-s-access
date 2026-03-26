@@ -10,12 +10,12 @@ users:
 
 roles:
   # Read-only access to documentation and shared resources
-  pull:
+  read:
     - obs-s-docs
     - obs-s-shared-configs
   
   # Write access to backend services
-  push:
+  write:
     - obs-s-api-gateway
     - obs-s-metrics-collector
     - obs-s-log-aggregator

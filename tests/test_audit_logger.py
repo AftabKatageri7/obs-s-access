@@ -216,5 +216,250 @@ class TestAuditLogger:
             assert "timestamp" in log_entry
             assert "level" in log_entry
             assert "message" in log_entry
+    
+    def test_log_project_operation_organization(self, capsys):
+        """Test logging an organization project operation"""
+        logger = AuditLogger()
+        
+        logger.log_project_operation(
+            action="grant_project_access",
+            user="test-user",
+            organization="test-org",
+            project_number=42,
+            permission="write",
+            result="success",
+            message="Access granted successfully",
+            source_team="DevOps Team",
+            source_file="devops.yaml",
+            project_type="organization"
+        )
+        
+        captured = capsys.readouterr()
+        log_entry = json.loads(captured.out.strip())
+        
+        assert log_entry["action"] == "grant_project_access"
+        assert log_entry["user"] == "test-user"
+        assert log_entry["repository"] == "test-org"  # Organization stored in repository field
+        assert log_entry["role"] == "write"  # Permission stored in role field
+        assert log_entry["result"] == "success"
+        assert log_entry["message"] == "Access granted successfully"
+        assert log_entry["source_team"] == "DevOps Team"
+        assert log_entry["source_file"] == "devops.yaml"
+        assert log_entry["resource_type"] == "project"
+        assert log_entry["project_type"] == "organization"
+        assert log_entry["project_number"] == 42
+        assert "timestamp" in log_entry
+    
+    def test_log_project_operation_repository(self, capsys):
+        """Test logging a repository project operation"""
+        logger = AuditLogger()
+        
+        logger.log_project_operation(
+            action="update_project_permission",
+            user="alice",
+            organization="test-org",
+            project_number=5,
+            permission="admin",
+            result="success",
+            message="Permission updated",
+            project_type="repository",
+            project_repository="my-repo"
+        )
+        
+        captured = capsys.readouterr()
+        log_entry = json.loads(captured.out.strip())
+        
+        assert log_entry["action"] == "update_project_permission"
+        assert log_entry["user"] == "alice"
+        assert log_entry["resource_type"] == "project"
+        assert log_entry["project_type"] == "repository"
+        assert log_entry["project_number"] == 5
+        assert log_entry["project_repository"] == "my-repo"
+        assert log_entry["role"] == "admin"
+    
+    def test_log_operation_with_resource_type_repository(self, capsys):
+        """Test that repository operations have resource_type=repository"""
+        logger = AuditLogger()
+        
+        logger.log_operation(
+            action="add_collaborator",
+            user="bob",
+            repository="test-repo",
+            role="write",
+            result="success",
+            resource_type="repository"
+        )
+        
+        captured = capsys.readouterr()
+        log_entry = json.loads(captured.out.strip())
+        
+        assert log_entry["resource_type"] == "repository"
+        assert "project_type" not in log_entry
+        assert "project_number" not in log_entry
+        assert "project_repository" not in log_entry
+    
+    def test_log_operation_with_resource_type_project(self, capsys):
+        """Test that project operations have resource_type=project with project fields"""
+        logger = AuditLogger()
+        
+        logger.log_operation(
+            action="grant_project_access",
+            user="charlie",
+            repository="org-name",
+            role="read",
+            result="success",
+            resource_type="project",
+            project_type="organization",
+            project_number=10
+        )
+        
+        captured = capsys.readouterr()
+        log_entry = json.loads(captured.out.strip())
+        
+        assert log_entry["resource_type"] == "project"
+        assert log_entry["project_type"] == "organization"
+        assert log_entry["project_number"] == 10
+    
+    def test_log_operation_result_with_project_fields(self, capsys):
+        """Test logging an OperationResult with project-specific fields"""
+        logger = AuditLogger()
+        
+        result = OperationResult(
+            success=True,
+            action="grant_project_access",
+            user="dave",
+            repository="test-org",
+            role="write",
+            message="Project access granted"
+        )
+        
+        logger.log_operation_result(
+            result,
+            source_team="Backend Team",
+            source_file="backend.yaml",
+            resource_type="project",
+            project_type="organization",
+            project_number=7
+        )
+        
+        captured = capsys.readouterr()
+        log_entry = json.loads(captured.out.strip())
+        
+        assert log_entry["action"] == "grant_project_access"
+        assert log_entry["user"] == "dave"
+        assert log_entry["resource_type"] == "project"
+        assert log_entry["project_type"] == "organization"
+        assert log_entry["project_number"] == 7
+        assert log_entry["source_team"] == "Backend Team"
+        assert log_entry["source_file"] == "backend.yaml"
+    
+    def test_log_project_operation_failure(self, capsys):
+        """Test logging a failed project operation"""
+        logger = AuditLogger()
+        
+        logger.log_project_operation(
+            action="grant_project_access",
+            user="eve",
+            organization="test-org",
+            project_number=99,
+            permission="admin",
+            result="failure",
+            message="Project not found",
+            level="ERROR"
+        )
+        
+        captured = capsys.readouterr()
+        log_entry = json.loads(captured.out.strip())
+        
+        assert log_entry["result"] == "failure"
+        assert log_entry["message"] == "Project not found"
+        assert log_entry["resource_type"] == "project"
+    
+    def test_project_fields_consistency(self, capsys):
+        """Test that project-specific fields are consistently formatted"""
+        logger = AuditLogger()
+        
+        # Test organization project
+        logger.log_project_operation(
+            action="grant_project_access",
+            user="user1",
+            organization="org1",
+            project_number=1,
+            permission="read",
+            result="success",
+            project_type="organization"
+        )
+        
+        # Test repository project
+        logger.log_project_operation(
+            action="grant_project_access",
+            user="user2",
+            organization="org2",
+            project_number=2,
+            permission="write",
+            result="success",
+            project_type="repository",
+            project_repository="repo2"
+        )
+        
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
+        
+        assert len(lines) == 2
+        
+        # Verify organization project
+        org_log = json.loads(lines[0])
+        assert org_log["resource_type"] == "project"
+        assert org_log["project_type"] == "organization"
+        assert org_log["project_number"] == 1
+        assert "project_repository" not in org_log
+        
+        # Verify repository project
+        repo_log = json.loads(lines[1])
+        assert repo_log["resource_type"] == "project"
+        assert repo_log["project_type"] == "repository"
+        assert repo_log["project_number"] == 2
+        assert repo_log["project_repository"] == "repo2"
+    
+    def test_mixed_repository_and_project_operations(self, capsys):
+        """Test logging both repository and project operations in sequence"""
+        logger = AuditLogger()
+        
+        # Log repository operation
+        logger.log_operation(
+            action="add_collaborator",
+            user="user1",
+            repository="repo1",
+            role="write",
+            result="success",
+            resource_type="repository"
+        )
+        
+        # Log project operation
+        logger.log_project_operation(
+            action="grant_project_access",
+            user="user2",
+            organization="org1",
+            project_number=5,
+            permission="admin",
+            result="success"
+        )
+        
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
+        
+        assert len(lines) == 2
+        
+        # Verify repository operation
+        repo_log = json.loads(lines[0])
+        assert repo_log["resource_type"] == "repository"
+        assert repo_log["action"] == "add_collaborator"
+        assert "project_type" not in repo_log
+        
+        # Verify project operation
+        project_log = json.loads(lines[1])
+        assert project_log["resource_type"] == "project"
+        assert project_log["action"] == "grant_project_access"
+        assert project_log["project_number"] == 5
 
 # Made with Bob

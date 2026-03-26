@@ -164,14 +164,14 @@ class GitHubClient:
         
         return collaborators
     
-    def add_collaborator(self, repo: Repository, username: str, 
+    def add_collaborator(self, repo: Repository, username: str,
                         permission: str) -> OperationResult:
         """Add a collaborator to a repository.
         
         Args:
             repo: Repository object
             username: GitHub username
-            permission: Permission level (pull, triage, push, maintain, admin)
+            permission: Permission level (read, triage, write, maintain, admin)
             
         Returns:
             OperationResult indicating success or failure

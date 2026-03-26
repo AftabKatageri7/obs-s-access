@@ -10,10 +10,13 @@ from github_collab_manager.config_loader import (
     load_yaml_file,
     validate_yaml_schema,
     validate_role_names,
+    validate_project_config,
+    parse_project_configs,
     load_team_configs,
-    VALID_ROLES
+    VALID_ROLES,
+    VALID_PROJECT_PERMISSIONS
 )
-from github_collab_manager.models import TeamConfig, ValidationResult
+from github_collab_manager.models import TeamConfig, ValidationResult, ProjectConfig, ProjectPermission
 
 
 class TestLoadYamlFile:
@@ -87,8 +90,8 @@ class TestValidateYamlSchema:
             'team_name': 'Test Team',
             'users': ['alice', 'bob'],
             'roles': {
-                'push': ['repo-a'],
-                'pull': ['repo-b']
+                'write': ['repo-a'],
+                'read': ['repo-b']
             }
         }
         
@@ -101,7 +104,7 @@ class TestValidateYamlSchema:
         """Test validation with missing team_name field."""
         data = {
             'users': ['alice'],
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -113,7 +116,7 @@ class TestValidateYamlSchema:
         """Test validation with missing users field."""
         data = {
             'team_name': 'Test',
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -138,7 +141,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': '   ',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -151,7 +154,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 123,
             'users': ['alice'],
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -164,7 +167,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 'Test',
             'users': 'alice',
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -177,7 +180,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 'Test',
             'users': [],
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -191,7 +194,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 'Test',
             'users': ['alice', 123, 'bob'],
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -204,7 +207,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 'Test',
             'users': ['alice', '  ', 'bob'],
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -217,7 +220,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 'Test',
             'users': ['alice'],
-            'roles': ['push', 'pull']
+            'roles': ['write', 'read']
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -244,7 +247,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 'Test',
             'users': ['alice'],
-            'roles': {'push': 'repo-a'}
+            'roles': {'write': 'repo-a'}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -257,7 +260,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 'Test',
             'users': ['alice'],
-            'roles': {'push': []}
+            'roles': {'write': []}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -270,13 +273,13 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 'Test',
             'users': ['alice'],
-            'roles': {'push': ['repo-a', 123, 'repo-b']}
+            'roles': {'write': ['repo-a', 123, 'repo-b']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
         
         assert result.valid is False
-        assert any("roles['push'][1]" in error for error in result.errors)
+        assert any("roles['write'][1]" in error for error in result.errors)
 
 
 class TestValidateRoleNames:
@@ -286,9 +289,9 @@ class TestValidateRoleNames:
         """Test validation with all valid GitHub roles."""
         data = {
             'roles': {
-                'pull': ['repo-a'],
+                'read': ['repo-a'],
                 'triage': ['repo-b'],
-                'push': ['repo-c'],
+                'write': ['repo-c'],
                 'maintain': ['repo-d'],
                 'admin': ['repo-e']
             }
@@ -304,7 +307,7 @@ class TestValidateRoleNames:
         data = {
             'roles': {
                 'superuser': ['repo-a'],
-                'push': ['repo-b']
+                'write': ['repo-b']
             }
         }
         
@@ -320,7 +323,7 @@ class TestValidateRoleNames:
             'roles': {
                 'superuser': ['repo-a'],
                 'owner': ['repo-b'],
-                'push': ['repo-c']
+                'write': ['repo-c']
             }
         }
         
@@ -342,7 +345,7 @@ class TestValidateRoleNames:
     
     def test_validate_non_dict_roles(self):
         """Test validation when roles is not a dictionary."""
-        data = {'roles': ['push', 'pull']}
+        data = {'roles': ['write', 'read']}
         
         result = validate_role_names(data, 'test.yaml')
         
@@ -362,7 +365,7 @@ class TestLoadTeamConfigs:
                 yaml.dump({
                     'team_name': 'Test Team',
                     'users': ['alice', 'bob'],
-                    'roles': {'push': ['repo-a']}
+                    'roles': {'write': ['repo-a']}
                 }, f)
             
             configs, result = load_team_configs(temp_dir)
@@ -371,7 +374,7 @@ class TestLoadTeamConfigs:
             assert len(configs) == 1
             assert configs[0].team_name == 'Test Team'
             assert configs[0].users == ['alice', 'bob']
-            assert configs[0].roles == {'push': ['repo-a']}
+            assert configs[0].roles == {'write': ['repo-a']}
             assert str(yaml_path) in configs[0].source_file
     
     def test_load_multiple_team_configs(self):
@@ -384,7 +387,7 @@ class TestLoadTeamConfigs:
                     yaml.dump({
                         'team_name': f'Team {i}',
                         'users': [f'user{i}'],
-                        'roles': {'push': [f'repo{i}']}
+                        'roles': {'write': [f'repo{i}']}
                     }, f)
             
             configs, result = load_team_configs(temp_dir)
@@ -421,7 +424,7 @@ class TestLoadTeamConfigs:
                 yaml.dump({
                     'team_name': 'Valid Team',
                     'users': ['alice'],
-                    'roles': {'push': ['repo-a']}
+                    'roles': {'write': ['repo-a']}
                 }, f)
             
             invalid_path = Path(temp_dir) / 'invalid.yaml'
@@ -465,7 +468,7 @@ class TestLoadTeamConfigs:
                     yaml.dump({
                         'team_name': name,
                         'users': ['user'],
-                        'roles': {'push': ['repo']}
+                        'roles': {'write': ['repo']}
                     }, f)
             
             configs, result = load_team_configs(temp_dir)
@@ -484,7 +487,7 @@ class TestLoadTeamConfigs:
                 yaml.dump({
                     'team_name': 'Team YAML',
                     'users': ['alice'],
-                    'roles': {'push': ['repo-a']}
+                    'roles': {'write': ['repo-a']}
                 }, f)
             
             # Create .yml file
@@ -493,7 +496,7 @@ class TestLoadTeamConfigs:
                 yaml.dump({
                     'team_name': 'Team YML',
                     'users': ['bob'],
-                    'roles': {'push': ['repo-b']}
+                    'roles': {'write': ['repo-b']}
                 }, f)
             
             configs, result = load_team_configs(temp_dir)
@@ -531,6 +534,518 @@ class TestIntegrationWithFixtures:
         role_result = validate_role_names(data, 'invalid-role.yaml')
         
         assert schema_result.valid is True  # Schema is valid
+
+class TestValidateProjectConfig:
+    """Test suite for validate_project_config function."""
+    
+    def test_validate_missing_projects_section(self):
+        """Test validation when projects section is missing (backward compatibility)."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']}
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is True
+        assert len(result.errors) == 0
+    
+    def test_validate_valid_organization_projects(self):
+        """Test validation with valid organization projects."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']},
+            'projects': {
+                'organization_projects': [
+                    {'number': 1, 'permission': 'read'},
+                    {'number': 5, 'permission': 'write'},
+                    {'number': 10, 'permission': 'admin'}
+                ]
+            }
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is True
+        assert len(result.errors) == 0
+    
+    def test_validate_valid_repository_projects(self):
+        """Test validation with valid repository projects."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']},
+            'projects': {
+                'repository_projects': [
+                    {'repository': 'org/repo-a', 'number': 2, 'permission': 'read'},
+                    {'repository': 'org/repo-b', 'number': 3, 'permission': 'write'}
+                ]
+            }
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is True
+        assert len(result.errors) == 0
+    
+    def test_validate_mixed_project_types(self):
+        """Test validation with both organization and repository projects."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']},
+            'projects': {
+                'organization_projects': [
+                    {'number': 1, 'permission': 'read'}
+                ],
+                'repository_projects': [
+                    {'repository': 'org/repo-a', 'number': 2, 'permission': 'write'}
+                ]
+            }
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is True
+        assert len(result.errors) == 0
+    
+    def test_validate_projects_not_dict(self):
+        """Test validation when projects is not a dictionary."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']},
+            'projects': ['project1', 'project2']
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is False
+        assert any('dictionary' in error.lower() for error in result.errors)
+    
+    def test_validate_empty_projects_section(self):
+        """Test validation with empty projects section."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']},
+            'projects': {}
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is True
+        assert len(result.warnings) > 0
+        assert any('empty' in warning.lower() for warning in result.warnings)
+    
+    def test_validate_org_projects_not_list(self):
+        """Test validation when organization_projects is not a list."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']},
+            'projects': {
+                'organization_projects': {'number': 1, 'permission': 'read'}
+            }
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is False
+        assert any('list' in error.lower() for error in result.errors)
+    
+    def test_validate_org_project_missing_number(self):
+        """Test validation when organization project missing number field."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']},
+            'projects': {
+                'organization_projects': [
+                    {'permission': 'read'}
+                ]
+            }
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is False
+        assert any('number' in error.lower() for error in result.errors)
+    
+    def test_validate_org_project_invalid_number_type(self):
+        """Test validation when organization project number is not an integer."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']},
+            'projects': {
+                'organization_projects': [
+                    {'number': '1', 'permission': 'read'}
+                ]
+            }
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is False
+        assert any('integer' in error.lower() for error in result.errors)
+    
+    def test_validate_org_project_negative_number(self):
+        """Test validation when organization project number is negative."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']},
+            'projects': {
+                'organization_projects': [
+                    {'number': -1, 'permission': 'read'}
+                ]
+            }
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is False
+        assert any('positive' in error.lower() for error in result.errors)
+    
+    def test_validate_org_project_zero_number(self):
+        """Test validation when organization project number is zero."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']},
+            'projects': {
+                'organization_projects': [
+                    {'number': 0, 'permission': 'read'}
+                ]
+            }
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is False
+        assert any('positive' in error.lower() for error in result.errors)
+    
+    def test_validate_org_project_missing_permission(self):
+        """Test validation when organization project missing permission field."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']},
+            'projects': {
+                'organization_projects': [
+                    {'number': 1}
+                ]
+            }
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is False
+        assert any('permission' in error.lower() for error in result.errors)
+    
+    def test_validate_org_project_invalid_permission(self):
+        """Test validation when organization project has invalid permission."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']},
+            'projects': {
+                'organization_projects': [
+                    {'number': 1, 'permission': 'superuser'}
+                ]
+            }
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is False
+        assert any('superuser' in error for error in result.errors)
+        assert any('valid permissions' in error.lower() for error in result.errors)
+    
+    def test_validate_repo_project_missing_repository(self):
+        """Test validation when repository project missing repository field."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']},
+            'projects': {
+                'repository_projects': [
+                    {'number': 2, 'permission': 'read'}
+                ]
+            }
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is False
+        assert any('repository' in error.lower() for error in result.errors)
+    
+    def test_validate_repo_project_empty_repository(self):
+        """Test validation when repository project has empty repository string."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']},
+            'projects': {
+                'repository_projects': [
+                    {'repository': '  ', 'number': 2, 'permission': 'read'}
+                ]
+            }
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is False
+        assert any('empty' in error.lower() for error in result.errors)
+    
+    def test_validate_repo_project_invalid_repository_type(self):
+        """Test validation when repository project repository is not a string."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']},
+            'projects': {
+                'repository_projects': [
+                    {'repository': 123, 'number': 2, 'permission': 'read'}
+                ]
+            }
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is False
+        assert any('string' in error.lower() for error in result.errors)
+    
+    def test_validate_multiple_errors(self):
+        """Test validation with multiple errors in different projects."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']},
+            'projects': {
+                'organization_projects': [
+                    {'number': -1, 'permission': 'read'},  # Invalid number
+                    {'number': 2, 'permission': 'superuser'}  # Invalid permission
+                ],
+                'repository_projects': [
+                    {'repository': '', 'number': 3, 'permission': 'read'}  # Empty repo
+                ]
+            }
+        }
+        
+        result = validate_project_config(data, 'test.yaml')
+        
+        assert result.valid is False
+        assert len(result.errors) >= 3
+
+
+class TestParseProjectConfigs:
+    """Test suite for parse_project_configs function."""
+    
+    def test_parse_missing_projects_section(self):
+        """Test parsing when projects section is missing."""
+        data = {
+            'team_name': 'Test Team',
+            'users': ['alice'],
+            'roles': {'write': ['repo-a']}
+        }
+        
+        result = parse_project_configs(data)
+        
+        assert isinstance(result, list)
+        assert len(result) == 0
+    
+    def test_parse_organization_projects(self):
+        """Test parsing organization projects."""
+        data = {
+            'projects': {
+                'organization_projects': [
+                    {'number': 1, 'permission': 'read'},
+                    {'number': 5, 'permission': 'write'},
+                    {'number': 10, 'permission': 'admin'}
+                ]
+            }
+        }
+        
+        result = parse_project_configs(data)
+        
+        assert len(result) == 3
+        assert all(isinstance(p, ProjectConfig) for p in result)
+        assert result[0].number == 1
+        assert result[0].permission == ProjectPermission.READ
+        assert result[0].repository is None
+        assert result[1].number == 5
+        assert result[1].permission == ProjectPermission.WRITE
+        assert result[2].number == 10
+        assert result[2].permission == ProjectPermission.ADMIN
+    
+    def test_parse_repository_projects(self):
+        """Test parsing repository projects."""
+        data = {
+            'projects': {
+                'repository_projects': [
+                    {'repository': 'org/repo-a', 'number': 2, 'permission': 'read'},
+                    {'repository': 'org/repo-b', 'number': 3, 'permission': 'write'}
+                ]
+            }
+        }
+        
+        result = parse_project_configs(data)
+        
+        assert len(result) == 2
+        assert all(isinstance(p, ProjectConfig) for p in result)
+        assert result[0].repository == 'org/repo-a'
+        assert result[0].number == 2
+        assert result[0].permission == ProjectPermission.READ
+        assert result[1].repository == 'org/repo-b'
+        assert result[1].number == 3
+        assert result[1].permission == ProjectPermission.WRITE
+    
+    def test_parse_mixed_project_types(self):
+        """Test parsing both organization and repository projects."""
+        data = {
+            'projects': {
+                'organization_projects': [
+                    {'number': 1, 'permission': 'read'}
+                ],
+                'repository_projects': [
+                    {'repository': 'org/repo-a', 'number': 2, 'permission': 'write'}
+                ]
+            }
+        }
+        
+        result = parse_project_configs(data)
+        
+        assert len(result) == 2
+        assert result[0].repository is None  # Org project
+        assert result[1].repository == 'org/repo-a'  # Repo project
+    
+    def test_parse_handles_malformed_data_gracefully(self):
+        """Test that parsing handles malformed data without crashing."""
+        data = {
+            'projects': {
+                'organization_projects': [
+                    {'number': 1, 'permission': 'read'},
+                    {'number': 'invalid'},  # Missing permission, invalid number
+                    {'number': 3, 'permission': 'write'}
+                ]
+            }
+        }
+        
+        result = parse_project_configs(data)
+        
+        # Should skip invalid entry but parse valid ones
+        assert len(result) == 2
+        assert result[0].number == 1
+        assert result[1].number == 3
+    
+    def test_parse_empty_projects_section(self):
+        """Test parsing empty projects section."""
+        data = {
+            'projects': {}
+        }
+        
+        result = parse_project_configs(data)
+        
+        assert isinstance(result, list)
+        assert len(result) == 0
+
+
+class TestLoadTeamConfigsWithProjects:
+    """Test suite for load_team_configs with projects section."""
+    
+    def test_load_config_with_projects(self):
+        """Test loading team configuration with projects section."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            yaml_path = Path(temp_dir) / 'team.yaml'
+            with open(yaml_path, 'w') as f:
+                yaml.dump({
+                    'team_name': 'Test Team',
+                    'users': ['alice'],
+                    'roles': {'write': ['repo-a']},
+                    'projects': {
+                        'organization_projects': [
+                            {'number': 1, 'permission': 'read'}
+                        ]
+                    }
+                }, f)
+            
+            configs, result = load_team_configs(temp_dir)
+            
+            assert result.valid is True
+            assert len(configs) == 1
+            assert len(configs[0].projects) == 1
+            assert configs[0].projects[0].number == 1
+            assert configs[0].projects[0].permission == ProjectPermission.READ
+    
+    def test_load_config_without_projects_backward_compatibility(self):
+        """Test loading team configuration without projects section (backward compatibility)."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            yaml_path = Path(temp_dir) / 'team.yaml'
+            with open(yaml_path, 'w') as f:
+                yaml.dump({
+                    'team_name': 'Test Team',
+                    'users': ['alice'],
+                    'roles': {'write': ['repo-a']}
+                }, f)
+            
+            configs, result = load_team_configs(temp_dir)
+            
+            assert result.valid is True
+            assert len(configs) == 1
+            assert len(configs[0].projects) == 0  # Empty projects list
+    
+    def test_load_config_with_invalid_projects(self):
+        """Test loading team configuration with invalid projects section."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            yaml_path = Path(temp_dir) / 'team.yaml'
+            with open(yaml_path, 'w') as f:
+                yaml.dump({
+                    'team_name': 'Test Team',
+                    'users': ['alice'],
+                    'roles': {'write': ['repo-a']},
+                    'projects': {
+                        'organization_projects': [
+                            {'number': -1, 'permission': 'read'}  # Invalid number
+                        ]
+                    }
+                }, f)
+            
+            configs, result = load_team_configs(temp_dir)
+            
+            assert result.valid is False
+            assert len(configs) == 0  # Invalid projects prevent loading
+            assert any('positive' in error.lower() for error in result.errors)
+    
+    def test_load_real_test_fixture(self):
+        """Test loading the actual test-with-projects.yaml fixture."""
+        configs, result = load_team_configs('teams')
+        
+        # Find the test-with-projects config
+        test_config = None
+        for config in configs:
+            if config.team_name == 'test-team-with-projects':
+                test_config = config
+                break
+        
+        assert test_config is not None
+        assert len(test_config.projects) == 6  # 3 org + 3 repo projects
+        
+        # Verify organization projects
+        org_projects = [p for p in test_config.projects if p.repository is None]
+        assert len(org_projects) == 3
+        assert org_projects[0].number == 1
+        assert org_projects[0].permission == ProjectPermission.READ
+        
+        # Verify repository projects
+        repo_projects = [p for p in test_config.projects if p.repository is not None]
+        assert len(repo_projects) == 3
+        assert repo_projects[0].repository == 'observability-s/obs-s-access'
+        assert repo_projects[0].number == 2
+
         assert role_result.valid is False  # But role name is invalid
         assert any('superuser' in error for error in role_result.errors)
 

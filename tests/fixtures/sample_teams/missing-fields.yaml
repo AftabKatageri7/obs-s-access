@@ -2,7 +2,7 @@
 team_name: Incomplete Team
 # Missing 'users' field
 roles:
-  push:
+  write:
     - repo-a
 
 # Made with Bob

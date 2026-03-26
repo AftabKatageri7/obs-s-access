@@ -33,7 +33,7 @@ class TestPerformance:
             
             # Each role has access to 4 repositories with different permissions
             repos = []
-            permission = ["pull", "push", "admin"][role_idx % 3]
+            permission = ["read", "write", "admin"][role_idx % 3]
             for repo_idx in range(4):
                 repos.append(f"      - repo: observability-s/repo-{role_idx * 4 + repo_idx}\n")
                 repos.append(f"        permission: {permission}\n")
@@ -65,7 +65,7 @@ class TestPerformance:
             
             # Each role has access to 2 repositories
             repos = []
-            permission = ["pull", "push", "admin"][role_idx % 3]
+            permission = ["read", "write", "admin"][role_idx % 3]
             for repo_idx in range(2):
                 repos.append(f"      - repo: observability-s/repo-{role_idx * 2 + repo_idx}\n")
                 repos.append(f"        permission: {permission}\n")
@@ -128,7 +128,7 @@ class TestPerformance:
                         # Conflict resolution: higher permission wins
                         current = desired_state[member][repo]
                         new = repo_perm.permission
-                        perm_order = {"pull": 0, "push": 1, "admin": 2}
+                        perm_order = {"read": 0, "write": 1, "admin": 2}
                         if perm_order[new] > perm_order[current]:
                             desired_state[member][repo] = new
         

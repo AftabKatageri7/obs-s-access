@@ -1,0 +1,52 @@
+# Update Project Collaborator
+# Adds a new collaborator or updates existing collaborator's permission on a project
+# This mutation handles both add and update operations
+
+mutation UpdateProjectCollaborator($projectId: ID!, $userId: ID!, $role: ProjectV2Roles!) {
+  updateProjectV2Collaborators(
+    input: {
+      projectId: $projectId
+      collaborators: [{userId: $userId, role: $role}]
+    }
+  ) {
+    collaborators {
+      userId
+      role
+    }
+  }
+}
+
+# Valid ProjectV2Roles values:
+# - READ: View-only access
+# - WRITE: Can edit project items and views
+# - ADMIN: Full control including project settings
+# - NONE: Removes access (use for removal)
+
+# Example Variables (Add/Update):
+# {
+#   "projectId": "PVT_kwDOABCDEF4AABCD",
+#   "userId": "U_kgDOABCDEF",
+#   "role": "WRITE"
+# }
+
+# Example Response:
+# {
+#   "data": {
+#     "updateProjectV2Collaborators": {
+#       "collaborators": [
+#         {
+#           "userId": "U_kgDOABCDEF",
+#           "role": "WRITE"
+#         }
+#       ]
+#     }
+#   }
+# }
+
+# Note: To get userId, first query the user:
+# query GetUserId($login: String!) {
+#   user(login: $login) {
+#     id
+#     login
+#   }
+# }

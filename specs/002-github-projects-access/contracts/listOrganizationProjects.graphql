@@ -1,0 +1,52 @@
+# List Organization Projects
+# Retrieves all Projects v2 for a given organization
+# Used to validate project numbers and fetch project IDs
+
+query ListOrganizationProjects($org: String!, $cursor: String) {
+  organization(login: $org) {
+    projectsV2(first: 100, after: $cursor) {
+      nodes {
+        id
+        number
+        title
+        closed
+        url
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      totalCount
+    }
+  }
+}
+
+# Example Variables:
+# {
+#   "org": "observability-s",
+#   "cursor": null
+# }
+
+# Example Response:
+# {
+#   "data": {
+#     "organization": {
+#       "projectsV2": {
+#         "nodes": [
+#           {
+#             "id": "PVT_kwDOABCDEF4AABCD",
+#             "number": 1,
+#             "title": "Main Development Board",
+#             "closed": false,
+#             "url": "https://github.com/orgs/observability-s/projects/1"
+#           }
+#         ],
+#         "pageInfo": {
+#           "hasNextPage": false,
+#           "endCursor": null
+#         },
+#         "totalCount": 1
+#       }
+#     }
+#   }
+# }
