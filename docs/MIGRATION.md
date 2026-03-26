@@ -79,7 +79,7 @@ team_name: "DevOps Team"
 organization: "observability-s"
 repositories:
   - name: "obs-s-infrastructure"
-    permission: "push"
+    permission: "write"
 projects:
   - number: 1
     permission: "admin"
@@ -97,7 +97,7 @@ team_name: "Backend Team"
 organization: "observability-s"
 repositories:
   - name: "obs-s-backend"
-    permission: "pull"
+    permission: "read"
 projects:
   - number: 3
     repository: "obs-s-backend"
@@ -114,9 +114,9 @@ team_name: "Full Stack Team"
 organization: "observability-s"
 repositories:
   - name: "obs-s-frontend"
-    permission: "push"
+    permission: "write"
   - name: "obs-s-backend"
-    permission: "push"
+    permission: "write"
 projects:
   # Organization-level project
   - number: 1
@@ -233,7 +233,7 @@ projects:  # Optional - omit if you don't need project access
 ```yaml
 repositories:
   - name: "my-repo"
-    permission: "pull"  # Minimum permission needed
+    permission: "read"  # Minimum permission needed
 projects:
   - number: 10
     repository: "my-repo"

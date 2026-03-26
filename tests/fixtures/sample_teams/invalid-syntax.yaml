@@ -4,7 +4,7 @@ users:
   - alice
   - bob
 roles:
-  push:
+  write:
     - repo-a
   admin: [repo-b, repo-c
 # Missing closing bracket above - invalid YAML

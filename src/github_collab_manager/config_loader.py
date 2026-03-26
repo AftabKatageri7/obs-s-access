@@ -13,7 +13,7 @@ from .models import TeamConfig, ValidationResult, ProjectConfig, ProjectPermissi
 
 
 # Valid GitHub repository permission levels
-VALID_ROLES = {'pull', 'triage', 'push', 'maintain', 'admin'}
+VALID_ROLES = {'read', 'triage', 'write', 'maintain', 'admin'}
 
 # Valid GitHub project permission levels
 VALID_PROJECT_PERMISSIONS = {'read', 'write', 'admin'}

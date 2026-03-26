@@ -375,76 +375,31 @@ class ProjectsClient:
         """
         Get all collaborators for a project.
         
+        Note: GitHub Projects v2 API doesn't expose collaborators via GraphQL.
+        This method returns an empty list as a placeholder. Project access
+        is managed through the updateProjectV2Collaborator mutation.
+        
         Args:
             project_id: Project node ID
             
         Returns:
-            List of collaborator dictionaries with login, role, permission
+            Empty list (collaborators not queryable via GraphQL API)
             
         Raises:
             GraphQLError: On API errors
         """
-        query = """
-        query($projectId: ID!, $cursor: String) {
-          node(id: $projectId) {
-            ... on ProjectV2 {
-              collaborators(first: 100, after: $cursor) {
-                nodes {
-                  login
-                  ... on User {
-                    id
-                  }
-                }
-                edges {
-                  permission
-                }
-                pageInfo {
-                  hasNextPage
-                  endCursor
-                }
-              }
-            }
-          }
-          rateLimit {
-            remaining
-            resetAt
-          }
-        }
-        """
+        # GitHub Projects v2 API doesn't provide a way to query collaborators
+        # The collaborators field doesn't exist on ProjectV2 type
+        # We can only add/update/remove collaborators via mutations
+        # For now, return empty list and rely on mutations to manage access
         
-        collaborators = []
-        cursor = None
+        logger.debug(
+            f"get_project_collaborators called for project {project_id}. "
+            "Note: GitHub Projects v2 API doesn't expose collaborators list via GraphQL. "
+            "Returning empty list - all operations will be treated as additions."
+        )
         
-        while True:
-            variables = {"projectId": project_id, "cursor": cursor}
-            result = self._execute_with_retry(query, variables)
-            
-            project_data = result.get('node')
-            if not project_data:
-                raise GraphQLError(
-                    f"Project with ID '{project_id}' not found. "
-                    f"The project may have been deleted or your token may not have access to it. "
-                    f"Verify the project exists and your token has 'project' scope (read/write).",
-                    category=GraphQLErrorCategory.NOT_FOUND
-                )
-            
-            collab_data = project_data['collaborators']
-            nodes = collab_data['nodes']
-            edges = collab_data['edges']
-            
-            # Combine node and edge data
-            for node, edge in zip(nodes, edges):
-                collaborators.append({
-                    'login': node['login'],
-                    'id': node.get('id'),
-                    'permission': edge['permission']
-                })
-            
-            if not collab_data['pageInfo']['hasNextPage']:
-                break
-            cursor = collab_data['pageInfo']['endCursor']
-        
-        return collaborators
+        return []
     
     def get_user_id(self, username: str) -> str:
         """

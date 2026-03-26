@@ -52,11 +52,11 @@ engineering-team:
     - diana-dev
   repositories:
     - repo: observability-s/core-service
-      permission: push
+      permission: write
     - repo: observability-s/api-gateway
-      permission: push
+      permission: write
     - repo: observability-s/frontend
-      permission: push
+      permission: write
 """)
         
         # Create operations team config
@@ -78,9 +78,9 @@ on-call:
     - charlie-dev
   repositories:
     - repo: observability-s/core-service
-      permission: push
+      permission: write
     - repo: observability-s/monitoring
-      permission: push
+      permission: write
 """)
         
         return configs_dir
@@ -95,13 +95,13 @@ on-call:
             existing = {
                 "observability-s/core-service": [
                     CollaboratorInfo(username="alice-eng", permission="admin"),
-                    CollaboratorInfo(username="old-dev", permission="push"),  # Stale
+                    CollaboratorInfo(username="old-dev", permission="write"),  # Stale
                 ],
                 "observability-s/api-gateway": [
-                    CollaboratorInfo(username="bob-eng", permission="push"),  # Needs update
+                    CollaboratorInfo(username="bob-eng", permission="write"),  # Needs update
                 ],
                 "observability-s/frontend": [
-                    CollaboratorInfo(username="stale-contractor", permission="pull"),  # Stale
+                    CollaboratorInfo(username="stale-contractor", permission="read"),  # Stale
                 ],
                 "observability-s/infrastructure": [],
                 "observability-s/monitoring": [
@@ -334,7 +334,7 @@ on-call:
             
             for repo_perm in config.repositories:
                 assert repo_perm.repo is not None
-                assert repo_perm.permission in ["pull", "push", "admin"]
+                assert repo_perm.permission in ["read", "write", "admin"]
 
     def test_operation_summary_reporting(
         self, sample_configs_dir, mock_github_client, audit_log_file

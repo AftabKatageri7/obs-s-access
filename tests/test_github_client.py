@@ -159,7 +159,7 @@ class TestListCollaborators:
         
         result = github_client.list_collaborators(mock_repo)
         
-        assert result == {"user1": "push", "user2": "admin"}
+        assert result == {"user1": "write", "user2": "admin"}
     
     def test_list_collaborators_empty(self, github_client):
         """Test listing collaborators for repository with none."""
@@ -195,14 +195,14 @@ class TestAddCollaborator:
         mock_repo.name = "test_repo"
         mock_repo.add_to_collaborators.return_value = None
         
-        result = github_client.add_collaborator(mock_repo, "new_user", "push")
+        result = github_client.add_collaborator(mock_repo, "new_user", "write")
         
         assert result.success is True
         assert result.action == "add_collaborator"
         assert result.user == "new_user"
         assert result.repository == "test_repo"
-        assert result.role == "push"
-        mock_repo.add_to_collaborators.assert_called_once_with("new_user", permission="push")
+        assert result.role == "write"
+        mock_repo.add_to_collaborators.assert_called_once_with("new_user", permission="write")
     
     def test_add_collaborator_api_error(self, github_client, mock_logger):
         """Test API error during collaborator addition."""
@@ -211,7 +211,7 @@ class TestAddCollaborator:
         error = GithubException(status=422, data={"message": "Validation Failed"}, headers={})
         mock_repo.add_to_collaborators.side_effect = error
         
-        result = github_client.add_collaborator(mock_repo, "new_user", "push")
+        result = github_client.add_collaborator(mock_repo, "new_user", "write")
         
         assert result.success is False
         assert result.action == "add_collaborator"
@@ -265,7 +265,7 @@ class TestRetryLogic:
         ]
         
         with patch('time.sleep'):  # Mock sleep to speed up test
-            result = github_client.add_collaborator(mock_repo, "user", "push")
+            result = github_client.add_collaborator(mock_repo, "user", "write")
         
         assert result.success is True
         assert mock_repo.add_to_collaborators.call_count == 3
@@ -280,7 +280,7 @@ class TestRetryLogic:
         mock_repo.add_to_collaborators.side_effect = error
         
         with patch('time.sleep'):
-            result = github_client.add_collaborator(mock_repo, "user", "push", max_retries=2)
+            result = github_client.add_collaborator(mock_repo, "user", "write", max_retries=2)
         
         assert result.success is False
         assert result.error == error

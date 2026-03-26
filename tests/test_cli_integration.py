@@ -35,10 +35,10 @@ users:
   - alice
   - bob
 roles:
-  push:
+  write:
     - repo1
     - repo2
-  pull:
+  read:
     - repo3
 """)
     
@@ -197,7 +197,7 @@ class TestDryRunMode:
         mock_client_class.return_value = mock_client
         
         mock_manager = Mock()
-        mock_manager.process_team_configs.return_value = {"repo1": {"user1": "push"}}
+        mock_manager.process_team_configs.return_value = {"repo1": {"user1": "write"}}
         mock_manager.apply_access_grants.return_value = []
         mock_manager_class.return_value = mock_manager
         
@@ -235,14 +235,14 @@ class TestNormalMode:
         mock_client_class.return_value = mock_client
         
         mock_manager = Mock()
-        mock_manager.process_team_configs.return_value = {"repo1": {"user1": "push"}}
+        mock_manager.process_team_configs.return_value = {"repo1": {"user1": "write"}}
         mock_manager.apply_access_grants.return_value = [
             OperationResult(
                 success=True,
                 action="add_collaborator",
                 user="user1",
                 repository="repo1",
-                role="push",
+                role="write",
                 message="Success"
             )
         ]
@@ -869,7 +869,7 @@ class TestStaleCollaboratorWorkflow:
         team_config = TeamConfig(
             team_name="test-team",
             users=["alice"],
-            roles={"push": ["repo1"]},
+            roles={"write": ["repo1"]},
             projects=[
                 ProjectConfig(number=1, permission=ProjectPermission.WRITE, repository=None)
             ],
@@ -892,7 +892,7 @@ class TestStaleCollaboratorWorkflow:
         mock_projects_class.return_value = mock_projects
         
         mock_manager = Mock()
-        mock_manager.process_team_configs.return_value = {"repo1": {"alice": "push"}}
+        mock_manager.process_team_configs.return_value = {"repo1": {"alice": "write"}}
         mock_manager.apply_access_grants.return_value = []  # Return empty list for results
         mock_manager.apply_project_access.return_value = []  # Return empty list for project errors
         

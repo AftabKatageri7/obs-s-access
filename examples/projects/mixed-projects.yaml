@@ -7,9 +7,9 @@ organization: "observability-s"
 # Repository access
 repositories:
   - name: "obs-s-infrastructure"
-    permission: "push"
+    permission: "write"
   - name: "obs-s-deployment"
-    permission: "push"
+    permission: "write"
 
 # Mixed project access: both organization-level and repository-level
 projects:

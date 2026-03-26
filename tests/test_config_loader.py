@@ -90,8 +90,8 @@ class TestValidateYamlSchema:
             'team_name': 'Test Team',
             'users': ['alice', 'bob'],
             'roles': {
-                'push': ['repo-a'],
-                'pull': ['repo-b']
+                'write': ['repo-a'],
+                'read': ['repo-b']
             }
         }
         
@@ -104,7 +104,7 @@ class TestValidateYamlSchema:
         """Test validation with missing team_name field."""
         data = {
             'users': ['alice'],
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -116,7 +116,7 @@ class TestValidateYamlSchema:
         """Test validation with missing users field."""
         data = {
             'team_name': 'Test',
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -141,7 +141,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': '   ',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -154,7 +154,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 123,
             'users': ['alice'],
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -167,7 +167,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 'Test',
             'users': 'alice',
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -180,7 +180,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 'Test',
             'users': [],
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -194,7 +194,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 'Test',
             'users': ['alice', 123, 'bob'],
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -207,7 +207,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 'Test',
             'users': ['alice', '  ', 'bob'],
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -220,7 +220,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 'Test',
             'users': ['alice'],
-            'roles': ['push', 'pull']
+            'roles': ['write', 'read']
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -247,7 +247,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 'Test',
             'users': ['alice'],
-            'roles': {'push': 'repo-a'}
+            'roles': {'write': 'repo-a'}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -260,7 +260,7 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 'Test',
             'users': ['alice'],
-            'roles': {'push': []}
+            'roles': {'write': []}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
@@ -273,13 +273,13 @@ class TestValidateYamlSchema:
         data = {
             'team_name': 'Test',
             'users': ['alice'],
-            'roles': {'push': ['repo-a', 123, 'repo-b']}
+            'roles': {'write': ['repo-a', 123, 'repo-b']}
         }
         
         result = validate_yaml_schema(data, 'test.yaml')
         
         assert result.valid is False
-        assert any("roles['push'][1]" in error for error in result.errors)
+        assert any("roles['write'][1]" in error for error in result.errors)
 
 
 class TestValidateRoleNames:
@@ -289,9 +289,9 @@ class TestValidateRoleNames:
         """Test validation with all valid GitHub roles."""
         data = {
             'roles': {
-                'pull': ['repo-a'],
+                'read': ['repo-a'],
                 'triage': ['repo-b'],
-                'push': ['repo-c'],
+                'write': ['repo-c'],
                 'maintain': ['repo-d'],
                 'admin': ['repo-e']
             }
@@ -307,7 +307,7 @@ class TestValidateRoleNames:
         data = {
             'roles': {
                 'superuser': ['repo-a'],
-                'push': ['repo-b']
+                'write': ['repo-b']
             }
         }
         
@@ -323,7 +323,7 @@ class TestValidateRoleNames:
             'roles': {
                 'superuser': ['repo-a'],
                 'owner': ['repo-b'],
-                'push': ['repo-c']
+                'write': ['repo-c']
             }
         }
         
@@ -345,7 +345,7 @@ class TestValidateRoleNames:
     
     def test_validate_non_dict_roles(self):
         """Test validation when roles is not a dictionary."""
-        data = {'roles': ['push', 'pull']}
+        data = {'roles': ['write', 'read']}
         
         result = validate_role_names(data, 'test.yaml')
         
@@ -365,7 +365,7 @@ class TestLoadTeamConfigs:
                 yaml.dump({
                     'team_name': 'Test Team',
                     'users': ['alice', 'bob'],
-                    'roles': {'push': ['repo-a']}
+                    'roles': {'write': ['repo-a']}
                 }, f)
             
             configs, result = load_team_configs(temp_dir)
@@ -374,7 +374,7 @@ class TestLoadTeamConfigs:
             assert len(configs) == 1
             assert configs[0].team_name == 'Test Team'
             assert configs[0].users == ['alice', 'bob']
-            assert configs[0].roles == {'push': ['repo-a']}
+            assert configs[0].roles == {'write': ['repo-a']}
             assert str(yaml_path) in configs[0].source_file
     
     def test_load_multiple_team_configs(self):
@@ -387,7 +387,7 @@ class TestLoadTeamConfigs:
                     yaml.dump({
                         'team_name': f'Team {i}',
                         'users': [f'user{i}'],
-                        'roles': {'push': [f'repo{i}']}
+                        'roles': {'write': [f'repo{i}']}
                     }, f)
             
             configs, result = load_team_configs(temp_dir)
@@ -424,7 +424,7 @@ class TestLoadTeamConfigs:
                 yaml.dump({
                     'team_name': 'Valid Team',
                     'users': ['alice'],
-                    'roles': {'push': ['repo-a']}
+                    'roles': {'write': ['repo-a']}
                 }, f)
             
             invalid_path = Path(temp_dir) / 'invalid.yaml'
@@ -468,7 +468,7 @@ class TestLoadTeamConfigs:
                     yaml.dump({
                         'team_name': name,
                         'users': ['user'],
-                        'roles': {'push': ['repo']}
+                        'roles': {'write': ['repo']}
                     }, f)
             
             configs, result = load_team_configs(temp_dir)
@@ -487,7 +487,7 @@ class TestLoadTeamConfigs:
                 yaml.dump({
                     'team_name': 'Team YAML',
                     'users': ['alice'],
-                    'roles': {'push': ['repo-a']}
+                    'roles': {'write': ['repo-a']}
                 }, f)
             
             # Create .yml file
@@ -496,7 +496,7 @@ class TestLoadTeamConfigs:
                 yaml.dump({
                     'team_name': 'Team YML',
                     'users': ['bob'],
-                    'roles': {'push': ['repo-b']}
+                    'roles': {'write': ['repo-b']}
                 }, f)
             
             configs, result = load_team_configs(temp_dir)
@@ -543,7 +543,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = validate_project_config(data, 'test.yaml')
@@ -556,7 +556,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']},
+            'roles': {'write': ['repo-a']},
             'projects': {
                 'organization_projects': [
                     {'number': 1, 'permission': 'read'},
@@ -576,7 +576,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']},
+            'roles': {'write': ['repo-a']},
             'projects': {
                 'repository_projects': [
                     {'repository': 'org/repo-a', 'number': 2, 'permission': 'read'},
@@ -595,7 +595,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']},
+            'roles': {'write': ['repo-a']},
             'projects': {
                 'organization_projects': [
                     {'number': 1, 'permission': 'read'}
@@ -616,7 +616,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']},
+            'roles': {'write': ['repo-a']},
             'projects': ['project1', 'project2']
         }
         
@@ -630,7 +630,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']},
+            'roles': {'write': ['repo-a']},
             'projects': {}
         }
         
@@ -645,7 +645,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']},
+            'roles': {'write': ['repo-a']},
             'projects': {
                 'organization_projects': {'number': 1, 'permission': 'read'}
             }
@@ -661,7 +661,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']},
+            'roles': {'write': ['repo-a']},
             'projects': {
                 'organization_projects': [
                     {'permission': 'read'}
@@ -679,7 +679,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']},
+            'roles': {'write': ['repo-a']},
             'projects': {
                 'organization_projects': [
                     {'number': '1', 'permission': 'read'}
@@ -697,7 +697,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']},
+            'roles': {'write': ['repo-a']},
             'projects': {
                 'organization_projects': [
                     {'number': -1, 'permission': 'read'}
@@ -715,7 +715,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']},
+            'roles': {'write': ['repo-a']},
             'projects': {
                 'organization_projects': [
                     {'number': 0, 'permission': 'read'}
@@ -733,7 +733,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']},
+            'roles': {'write': ['repo-a']},
             'projects': {
                 'organization_projects': [
                     {'number': 1}
@@ -751,7 +751,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']},
+            'roles': {'write': ['repo-a']},
             'projects': {
                 'organization_projects': [
                     {'number': 1, 'permission': 'superuser'}
@@ -770,7 +770,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']},
+            'roles': {'write': ['repo-a']},
             'projects': {
                 'repository_projects': [
                     {'number': 2, 'permission': 'read'}
@@ -788,7 +788,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']},
+            'roles': {'write': ['repo-a']},
             'projects': {
                 'repository_projects': [
                     {'repository': '  ', 'number': 2, 'permission': 'read'}
@@ -806,7 +806,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']},
+            'roles': {'write': ['repo-a']},
             'projects': {
                 'repository_projects': [
                     {'repository': 123, 'number': 2, 'permission': 'read'}
@@ -824,7 +824,7 @@ class TestValidateProjectConfig:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']},
+            'roles': {'write': ['repo-a']},
             'projects': {
                 'organization_projects': [
                     {'number': -1, 'permission': 'read'},  # Invalid number
@@ -850,7 +850,7 @@ class TestParseProjectConfigs:
         data = {
             'team_name': 'Test Team',
             'users': ['alice'],
-            'roles': {'push': ['repo-a']}
+            'roles': {'write': ['repo-a']}
         }
         
         result = parse_project_configs(data)
@@ -965,7 +965,7 @@ class TestLoadTeamConfigsWithProjects:
                 yaml.dump({
                     'team_name': 'Test Team',
                     'users': ['alice'],
-                    'roles': {'push': ['repo-a']},
+                    'roles': {'write': ['repo-a']},
                     'projects': {
                         'organization_projects': [
                             {'number': 1, 'permission': 'read'}
@@ -989,7 +989,7 @@ class TestLoadTeamConfigsWithProjects:
                 yaml.dump({
                     'team_name': 'Test Team',
                     'users': ['alice'],
-                    'roles': {'push': ['repo-a']}
+                    'roles': {'write': ['repo-a']}
                 }, f)
             
             configs, result = load_team_configs(temp_dir)
@@ -1006,7 +1006,7 @@ class TestLoadTeamConfigsWithProjects:
                 yaml.dump({
                     'team_name': 'Test Team',
                     'users': ['alice'],
-                    'roles': {'push': ['repo-a']},
+                    'roles': {'write': ['repo-a']},
                     'projects': {
                         'organization_projects': [
                             {'number': -1, 'permission': 'read'}  # Invalid number

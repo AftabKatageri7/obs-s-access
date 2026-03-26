@@ -9,9 +9,9 @@ users:
   - charlie
 
 roles:
-  pull:
+  read:
     - observability-s/obs-s-access
-  push:
+  write:
     - observability-s/obs-s-backend
 
 projects:

@@ -149,10 +149,10 @@ users:
   - bob
   - charlie
 roles:
-  push:
+  write:
     - api-service
     - data-processor
-  pull:
+  read:
     - frontend-app
   admin:
     - infrastructure-repo
@@ -170,9 +170,9 @@ projects:  # Optional: GitHub Projects V2 access
 ```
 
 **Valid Roles:**
-- `pull` - Read-only access
+- `read` - Read-only access
 - `triage` - Read access + issue management
-- `push` - Read/write access
+- `write` - Read/write access
 - `maintain` - Push access + repository management (no admin)
 - `admin` - Full administrative access
 
@@ -193,12 +193,12 @@ users:
 # Required: Role-to-repository mappings
 roles:
   # Each role is optional, but at least one role must be defined
-  pull:      # Read-only access
+  read:      # Read-only access
     - string (repository name)
     - string
   triage:    # Read + issue management
     - string
-  push:      # Read/write access
+  write:      # Read/write access
     - string
   maintain:  # Push + repository management
     - string
@@ -213,9 +213,9 @@ roles:
 | `team_name` | string | Yes | Unique identifier for the team. Used for logging and conflict resolution. |
 | `users` | list[string] | Yes | List of GitHub usernames. Must contain at least one user. |
 | `roles` | object | Yes | Mapping of permission levels to repository lists. At least one role must be defined. |
-| `roles.pull` | list[string] | No | Repositories with read-only access. |
+| `roles.read` | list[string] | No | Repositories with read-only access. |
 | `roles.triage` | list[string] | No | Repositories with read + issue management access. |
-| `roles.push` | list[string] | No | Repositories with read/write access. |
+| `roles.write` | list[string] | No | Repositories with read/write access. |
 | `roles.maintain` | list[string] | No | Repositories with push + repository management access (no admin). |
 | `roles.admin` | list[string] | No | Repositories with full administrative access. |
 
@@ -263,7 +263,7 @@ When the same user appears in multiple team files with different permissions for
 
 Example:
 ```
-teams/a-backend.yaml:  alice → api-service (push), project 1 (read)
+teams/a-backend.yaml:  alice → api-service (write), project 1 (read)
 teams/b-security.yaml: alice → api-service (admin), project 1 (write)
 Result: alice gets admin access to repository and write access to project (b-security.yaml wins)
 ```
@@ -391,7 +391,7 @@ The tool scans the specified directory for YAML files and loads team configurati
 When multiple teams grant different permissions to the same user on the same repository:
 - Files are processed in **alphabetical order**
 - **Last file wins** (alphabetically last filename takes precedence)
-- Example: `a-team.yaml` grants `pull`, `z-team.yaml` grants `push` → final permission is `push`
+- Example: `a-team.yaml` grants `read`, `z-team.yaml` grants `write` → final permission is `write`
 
 ### 3. Change Detection
 
@@ -430,10 +430,10 @@ users:
   - alice
   - bob
 roles:
-  push:
+  write:
     - api-service
     - data-processor
-  pull:
+  read:
     - frontend-app
 projects:
   org_projects:
@@ -449,8 +449,8 @@ projects:
 ```
 
 Result:
-- `alice` and `bob` get `push` access to `api-service` and `data-processor`
-- `alice` and `bob` get `pull` access to `frontend-app`
+- `alice` and `bob` get `write` access to `api-service` and `data-processor`
+- `alice` and `bob` get `read` access to `frontend-app`
 - `alice` and `bob` get `write` access to organization projects 1 and 5
 - `alice` and `bob` get `read` access to organization project 3
 - `alice` and `bob` get `write` access to the api-service repository project 2
@@ -475,7 +475,7 @@ roles:
 
 Result:
 - `charlie` and `diana` get `admin` access to infrastructure repositories
-- `charlie` and `diana` get `push` access to application repositories
+- `charlie` and `diana` get `write` access to application repositories
 
 ### Example 3: Conflict Resolution
 
@@ -500,7 +500,7 @@ roles:
 ```
 
 Result:
-- `eve` gets `push` access to `api-service` (b-senior-team.yaml wins alphabetically)
+- `eve` gets `write` access to `api-service` (b-senior-team.yaml wins alphabetically)
 
 ### Example 6: Project Managers with Only Project Access
 
@@ -594,7 +594,7 @@ Result:
    python -c "import yaml; yaml.safe_load(open('team.yaml'))"
    ```
 2. Ensure all required fields are present: `team_name`, `users`, `roles`
-3. Verify role names are valid: `pull`, `triage`, `push`, `maintain`, `admin`
+3. Verify role names are valid: `read`, `triage`, `write`, `maintain`, `admin`
 4. Use `--validate-only` to test configurations before applying
    ```bash
    github-collab-manager --teams-dir ./teams --validate-only
@@ -847,15 +847,15 @@ This tool implements a zero-trust security model as defined in the project const
 **DO**:
 - ✅ Follow the principle of least privilege
 - ✅ Grant the minimum role required for each user's responsibilities
-- ✅ Use `pull` for read-only access
-- ✅ Use `push` for developers who need write access
+- ✅ Use `read` for read-only access
+- ✅ Use `write` for developers who need write access
 - ✅ Reserve `admin` for repository administrators only
 - ✅ Regularly audit and remove stale collaborators
 - ✅ Document why each user needs access to each repository
 
 **DON'T**:
 - ❌ Grant `admin` access by default
-- ❌ Give everyone `push` access "just in case"
+- ❌ Give everyone `write` access "just in case"
 - ❌ Leave collaborators with access after they leave the team
 - ❌ Grant access to repositories users don't actively work on
 
@@ -931,7 +931,7 @@ Before running in production:
 ### Principle of Least Privilege
 
 - Grant minimum permissions necessary for each role
-- Use `pull` for read-only access
+- Use `read` for read-only access
 - Reserve `admin` for infrastructure and deployment repositories only
 - Regularly review and audit access grants
 
@@ -1061,12 +1061,12 @@ collaborators = client.get_repository_collaborators("observability-s/repo-name")
 
 - `add_collaborator(repo: str, username: str, permission: str) -> None`
   - Add collaborator to repository with specified permission
-  - Permission must be one of: `pull`, `push`, `admin`
+  - Permission must be one of: `read`, `write`, `admin`
   - Raises `Exception` on API errors
 
 - `update_collaborator_permission(repo: str, username: str, permission: str) -> None`
   - Update existing collaborator's permission
-  - Permission must be one of: `pull`, `push`, `admin`
+  - Permission must be one of: `read`, `write`, `admin`
   - Raises `Exception` on API errors
 
 - `remove_collaborator(repo: str, username: str) -> None`
@@ -1115,7 +1115,7 @@ logger.log_operation(
     action="add_collaborator",
     repo="observability-s/repo-name",
     username="alice",
-    permission="push",
+    permission="write",
     success=True
 )
 ```
@@ -1149,7 +1149,7 @@ Represents repository access permission.
 @dataclass
 class RepositoryPermission:
     repo: str
-    permission: str  # "pull", "push", or "admin"
+    permission: str  # "read", "write", or "admin"
 ```
 
 #### CollaboratorInfo
@@ -1160,7 +1160,7 @@ Represents current collaborator state from GitHub.
 @dataclass
 class CollaboratorInfo:
     username: str
-    permission: str  # "pull", "push", or "admin"
+    permission: str  # "read", "write", or "admin"
 ```
 
 #### ChangePlan

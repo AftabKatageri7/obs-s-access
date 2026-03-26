@@ -7,7 +7,7 @@ organization: "observability-s"
 # Repository access (required for repository-level projects)
 repositories:
   - name: "obs-s-backend"
-    permission: "pull"
+    permission: "read"
 
 # Repository-level projects (attached to specific repositories)
 projects:

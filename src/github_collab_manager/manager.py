@@ -561,20 +561,26 @@ class CollaboratorManager:
                         )
                         continue
                     
+                    # Note: GitHub Projects v2 API doesn't expose collaborators list
+                    # We'll attempt to grant/update access for all users
+                    # The API will handle whether it's an add or update
+                    
                     # Grant access to each user in the team
                     for username in team_config.users:
                         try:
+                            desired_permission = project_config.permission.value.upper()
+                            
                             # Get user ID (required for GraphQL mutations)
                             user_id = self.projects_client.get_user_id(username)
                             
                             if dry_run:
                                 # Dry run - just log the planned operation
                                 self.logger.log_info(
-                                    f"[DRY RUN] Would grant {username} {project_config.permission.value} access to project #{project['number']}",
+                                    f"[DRY RUN] Would grant {username} {desired_permission} access on project #{project['number']}",
                                     action="grant_project_access_dry_run",
                                     user=username,
                                     project_number=project['number'],
-                                    permission=project_config.permission.value,
+                                    permission=desired_permission,
                                     project_type=project_type,
                                     repository=project_config.repository
                                 )
@@ -583,7 +589,7 @@ class CollaboratorManager:
                                 self.projects_client.update_project_collaborator(
                                     project['id'],
                                     user_id,
-                                    project_config.permission.value
+                                    desired_permission
                                 )
                                 
                                 # Log successful operation
@@ -592,9 +598,9 @@ class CollaboratorManager:
                                     user=username,
                                     organization=organization,
                                     project_number=project['number'],
-                                    permission=project_config.permission.value,
+                                    permission=desired_permission,
                                     result="success",
-                                    message=f"Granted {username} {project_config.permission.value} access to project #{project['number']}",
+                                    message=f"Granted {username} {desired_permission} access to project #{project['number']}",
                                     source_team=team_config.team_name,
                                     source_file=team_config.source_file,
                                     project_type=project_type,
@@ -628,7 +634,6 @@ class CollaboratorManager:
                         project_type=project_type,
                         repository=project_config.repository
                     )
-        
         # Summary
         success_count = total_grants - len(errors)
         self.logger.log_info(
@@ -639,6 +644,8 @@ class CollaboratorManager:
             success=success_count,
             failure=len(errors)
         )
+        
+        return errors
         
     
     def detect_stale_project_collaborators(self, team_configs: List[TeamConfig],
@@ -751,7 +758,7 @@ class CollaboratorManager:
                 self.logger.log_error(
                     f"Error detecting stale collaborators for project {project_id}: {e}",
                     project_id=project_id,
-                    error=str(e)
+                    error=e
                 )
         
         total_stale = sum(len(users) for users in stale_collaborators.values())
@@ -859,7 +866,7 @@ class CollaboratorManager:
                         errors.append(error_msg)
                         self.logger.log_error(
                             error_msg,
-                            error=str(e),
+                            error=e,
                             user=username,
                             project_number=project_number,
                             project_type=project_type,
@@ -871,7 +878,7 @@ class CollaboratorManager:
                 errors.append(error_msg)
                 self.logger.log_error(
                     error_msg,
-                    error=str(e),
+                    error=e,
                     project_id=project_id
                 )
         

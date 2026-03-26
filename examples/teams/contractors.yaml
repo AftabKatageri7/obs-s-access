@@ -11,7 +11,7 @@ users:
 
 roles:
   # Read-only access to designated repositories
-  pull:
+  read:
     - public-docs
     - api-specs
     - integration-examples
@@ -24,7 +24,7 @@ roles:
 #    - Use automation to flag expired contractor accounts
 #
 # 2. Minimal Permissions:
-#    - Grant only "pull" (read) access unless write access is required
+#    - Grant only "read" access unless write access is required
 #    - Limit repository access to only what's needed for the contract
 #    - Never grant admin permissions to contractors
 #

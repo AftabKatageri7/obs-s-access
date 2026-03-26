@@ -36,8 +36,8 @@ def sample_team_configs():
             team_name="backend-team",
             users=["alice", "bob"],
             roles={
-                "push": ["api-service", "data-processor"],
-                "pull": ["frontend-app"]
+                "write": ["api-service", "data-processor"],
+                "read": ["frontend-app"]
             },
             source_file="backend-team.yaml"
         ),
@@ -45,8 +45,8 @@ def sample_team_configs():
             team_name="frontend-team",
             users=["charlie", "diana"],
             roles={
-                "push": ["frontend-app"],
-                "pull": ["api-service"]
+                "write": ["frontend-app"],
+                "read": ["api-service"]
             },
             source_file="frontend-team.yaml"
         )
@@ -61,7 +61,7 @@ class TestProcessTeamConfigs:
         team_config = TeamConfig(
             team_name="test-team",
             users=["user1", "user2"],
-            roles={"push": ["repo1", "repo2"]},
+            roles={"write": ["repo1", "repo2"]},
             source_file="test.yaml"
         )
         
@@ -69,8 +69,8 @@ class TestProcessTeamConfigs:
         
         assert "repo1" in result
         assert "repo2" in result
-        assert result["repo1"] == {"user1": "push", "user2": "push"}
-        assert result["repo2"] == {"user1": "push", "user2": "push"}
+        assert result["repo1"] == {"user1": "write", "user2": "write"}
+        assert result["repo2"] == {"user1": "write", "user2": "write"}
     
     def test_process_multiple_teams(self, manager, sample_team_configs):
         """Test processing multiple team configurations."""
@@ -78,17 +78,17 @@ class TestProcessTeamConfigs:
         
         # Check api-service has users from both teams
         assert "api-service" in result
-        assert result["api-service"]["alice"] == "push"
-        assert result["api-service"]["bob"] == "push"
-        assert result["api-service"]["charlie"] == "pull"
-        assert result["api-service"]["diana"] == "pull"
+        assert result["api-service"]["alice"] == "write"
+        assert result["api-service"]["bob"] == "write"
+        assert result["api-service"]["charlie"] == "read"
+        assert result["api-service"]["diana"] == "read"
         
         # Check frontend-app
         assert "frontend-app" in result
-        assert result["frontend-app"]["alice"] == "pull"
-        assert result["frontend-app"]["bob"] == "pull"
-        assert result["frontend-app"]["charlie"] == "push"
-        assert result["frontend-app"]["diana"] == "push"
+        assert result["frontend-app"]["alice"] == "read"
+        assert result["frontend-app"]["bob"] == "read"
+        assert result["frontend-app"]["charlie"] == "write"
+        assert result["frontend-app"]["diana"] == "write"
     
     def test_conflict_resolution_alphabetical(self, manager):
         """Test conflict resolution uses alphabetical file order (last wins)."""
@@ -96,13 +96,13 @@ class TestProcessTeamConfigs:
             TeamConfig(
                 team_name="team-a",
                 users=["user1"],
-                roles={"pull": ["repo1"]},
+                roles={"read": ["repo1"]},
                 source_file="a-team.yaml"  # Alphabetically first
             ),
             TeamConfig(
                 team_name="team-b",
                 users=["user1"],
-                roles={"push": ["repo1"]},
+                roles={"write": ["repo1"]},
                 source_file="b-team.yaml"  # Alphabetically second (wins)
             )
         ]
@@ -110,7 +110,7 @@ class TestProcessTeamConfigs:
         result = manager.process_team_configs(team_configs)
         
         # Last file alphabetically wins
-        assert result["repo1"]["user1"] == "push"
+        assert result["repo1"]["user1"] == "write"
     
     def test_empty_team_configs(self, manager):
         """Test processing empty team configurations."""
@@ -124,18 +124,18 @@ class TestProcessTeamConfigs:
             team_name="multi-role-team",
             users=["user1"],
             roles={
-                "push": ["repo1"],
+                "write": ["repo1"],
                 "admin": ["repo2"],
-                "pull": ["repo3"]
+                "read": ["repo3"]
             },
             source_file="multi.yaml"
         )
         
         result = manager.process_team_configs([team_config])
         
-        assert result["repo1"]["user1"] == "push"
+        assert result["repo1"]["user1"] == "write"
         assert result["repo2"]["user1"] == "admin"
-        assert result["repo3"]["user1"] == "pull"
+        assert result["repo3"]["user1"] == "read"
 
 
 class TestDetectChanges:
@@ -147,12 +147,12 @@ class TestDetectChanges:
         mock_github_client.get_repository.return_value = mock_repo
         mock_github_client.list_collaborators.return_value = {}
         
-        desired_access = {"user1": "push", "user2": "admin"}
+        desired_access = {"user1": "write", "user2": "admin"}
         
         additions, updates, no_ops = manager.detect_changes("test-repo", desired_access)
         
         assert len(additions) == 2
-        assert ("user1", "push") in additions
+        assert ("user1", "write") in additions
         assert ("user2", "admin") in additions
         assert len(updates) == 0
         assert len(no_ops) == 0
@@ -162,17 +162,17 @@ class TestDetectChanges:
         mock_repo = Mock(spec=Repository)
         mock_github_client.get_repository.return_value = mock_repo
         mock_github_client.list_collaborators.return_value = {
-            "user1": "pull",
-            "user2": "push"
+            "user1": "read",
+            "user2": "write"
         }
         
-        desired_access = {"user1": "push", "user2": "admin"}
+        desired_access = {"user1": "write", "user2": "admin"}
         
         additions, updates, no_ops = manager.detect_changes("test-repo", desired_access)
         
         assert len(additions) == 0
         assert len(updates) == 2
-        assert ("user1", "push") in updates
+        assert ("user1", "write") in updates
         assert ("user2", "admin") in updates
         assert len(no_ops) == 0
     
@@ -181,11 +181,11 @@ class TestDetectChanges:
         mock_repo = Mock(spec=Repository)
         mock_github_client.get_repository.return_value = mock_repo
         mock_github_client.list_collaborators.return_value = {
-            "user1": "push",
+            "user1": "write",
             "user2": "admin"
         }
         
-        desired_access = {"user1": "push", "user2": "admin"}
+        desired_access = {"user1": "write", "user2": "admin"}
         
         additions, updates, no_ops = manager.detect_changes("test-repo", desired_access)
         
@@ -200,13 +200,13 @@ class TestDetectChanges:
         mock_repo = Mock(spec=Repository)
         mock_github_client.get_repository.return_value = mock_repo
         mock_github_client.list_collaborators.return_value = {
-            "user1": "pull",
-            "user2": "push"
+            "user1": "read",
+            "user2": "write"
         }
         
         desired_access = {
-            "user1": "push",    # Update
-            "user2": "push",    # No-op
+            "user1": "write",    # Update
+            "user2": "write",    # No-op
             "user3": "admin"    # Addition
         }
         
@@ -215,7 +215,7 @@ class TestDetectChanges:
         assert len(additions) == 1
         assert ("user3", "admin") in additions
         assert len(updates) == 1
-        assert ("user1", "push") in updates
+        assert ("user1", "write") in updates
         assert len(no_ops) == 1
         assert "user2" in no_ops
     
@@ -223,7 +223,7 @@ class TestDetectChanges:
         """Test handling repository not found."""
         mock_github_client.get_repository.return_value = None
         
-        desired_access = {"user1": "push"}
+        desired_access = {"user1": "write"}
         
         additions, updates, no_ops = manager.detect_changes("nonexistent", desired_access)
         
@@ -246,11 +246,11 @@ class TestApplyAccessGrants:
             action="add_collaborator",
             user="user1",
             repository="repo1",
-            role="push",
+            role="write",
             message="Added successfully"
         )
         
-        repo_access = {"repo1": {"user1": "push"}}
+        repo_access = {"repo1": {"user1": "write"}}
         
         results = manager.apply_access_grants(repo_access, dry_run=False)
         
@@ -263,17 +263,17 @@ class TestApplyAccessGrants:
         """Test applying permission updates."""
         mock_repo = Mock(spec=Repository)
         mock_github_client.get_repository.return_value = mock_repo
-        mock_github_client.list_collaborators.return_value = {"user1": "pull"}
+        mock_github_client.list_collaborators.return_value = {"user1": "read"}
         mock_github_client.update_collaborator.return_value = OperationResult(
             success=True,
             action="update_collaborator",
             user="user1",
             repository="repo1",
-            role="push",
+            role="write",
             message="Updated successfully"
         )
         
-        repo_access = {"repo1": {"user1": "push"}}
+        repo_access = {"repo1": {"user1": "write"}}
         
         results = manager.apply_access_grants(repo_access, dry_run=False)
         
@@ -287,7 +287,7 @@ class TestApplyAccessGrants:
         mock_github_client.get_repository.return_value = mock_repo
         mock_github_client.list_collaborators.return_value = {}
         
-        repo_access = {"repo1": {"user1": "push", "user2": "admin"}}
+        repo_access = {"repo1": {"user1": "write", "user2": "admin"}}
         
         results = manager.apply_access_grants(repo_access, dry_run=True)
         
@@ -302,9 +302,9 @@ class TestApplyAccessGrants:
         """Test skipping unchanged permissions."""
         mock_repo = Mock(spec=Repository)
         mock_github_client.get_repository.return_value = mock_repo
-        mock_github_client.list_collaborators.return_value = {"user1": "push"}
+        mock_github_client.list_collaborators.return_value = {"user1": "write"}
         
-        repo_access = {"repo1": {"user1": "push"}}
+        repo_access = {"repo1": {"user1": "write"}}
         
         results = manager.apply_access_grants(repo_access, dry_run=False)
         
@@ -325,12 +325,12 @@ class TestApplyAccessGrants:
             action="add_collaborator",
             user="user1",
             repository="repo1",
-            role="push",
+            role="write",
             message="API error",
             error=Exception("API failed")
         )
         
-        repo_access = {"repo1": {"user1": "push"}}
+        repo_access = {"repo1": {"user1": "write"}}
         
         results = manager.apply_access_grants(repo_access, dry_run=False)
         
@@ -357,11 +357,11 @@ class TestApplyAccessGrants:
             action="add_collaborator",
             user="user1",
             repository="repo",
-            role="push"
+            role="write"
         )
         
         repo_access = {
-            "repo1": {"user1": "push"},
+            "repo1": {"user1": "write"},
             "repo2": {"user2": "admin"}
         }
         
@@ -385,7 +385,7 @@ class TestIntegration:
             action="add_collaborator",
             user="user",
             repository="repo",
-            role="push"
+            role="write"
         )
         
         # Process configs
@@ -421,7 +421,7 @@ class TestStaleCollaboratorDetection:
         
         # Desired access (alice and bob only)
         repo_access = {
-            'repo1': {'alice': 'push', 'bob': 'pull'}
+            'repo1': {'alice': 'write', 'bob': 'read'}
         }
         
         stale = manager.detect_stale_collaborators(repo_access)
@@ -448,7 +448,7 @@ class TestStaleCollaboratorDetection:
         
         # Desired access (alice and bob only)
         repo_access = {
-            'repo1': {'alice': 'push', 'bob': 'pull'}
+            'repo1': {'alice': 'write', 'bob': 'read'}
         }
         
         stale = manager.detect_stale_collaborators(repo_access)
@@ -471,7 +471,7 @@ class TestStaleCollaboratorDetection:
         mock_github_client._org = mock_org
         
         repo_access = {
-            'repo1': {'alice': 'push', 'bob': 'pull'}
+            'repo1': {'alice': 'write', 'bob': 'read'}
         }
         
         stale = manager.detect_stale_collaborators(repo_access)
@@ -483,7 +483,7 @@ class TestStaleCollaboratorDetection:
         mock_github_client.get_repository.return_value = None
         
         repo_access = {
-            'nonexistent-repo': {'alice': 'push'}
+            'nonexistent-repo': {'alice': 'write'}
         }
         
         stale = manager.detect_stale_collaborators(repo_access)
@@ -497,7 +497,7 @@ class TestStaleCollaboratorDetection:
         mock_github_client.list_collaborators.return_value = None
         
         repo_access = {
-            'repo1': {'alice': 'push'}
+            'repo1': {'alice': 'write'}
         }
         
         stale = manager.detect_stale_collaborators(repo_access)

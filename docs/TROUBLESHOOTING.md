@@ -186,7 +186,7 @@ curl -H "Authorization: token $GITHUB_TOKEN" -I https://api.github.com/user | gr
    ```yaml
    repositories:
      - name: "my-repo"
-       permission: "pull"  # Minimum permission needed
+       permission: "read"  # Minimum permission needed
    projects:
      - number: 10
        repository: "my-repo"  # Must match repository name above
@@ -370,8 +370,8 @@ curl -H "Authorization: token $GITHUB_TOKEN" -I https://api.github.com/user | gr
 **Solutions:**
 
 1. **Repository permissions:** Must be one of:
-   - `pull` (read-only)
-   - `push` (read-write)
+   - `read` (read-only)
+   - `write` (read-write)
    - `admin` (full access)
 
 2. **Project permissions:** Must be one of:

@@ -95,7 +95,7 @@ Team Configuration Format:
       permission: admin
       repository: api-service
 
-  Repository roles: pull, triage, push, maintain, admin
+  Repository roles: read, triage, write, maintain, admin
   Project permissions: read, write, admin
 
   Note: The 'projects' section is optional for backward compatibility.

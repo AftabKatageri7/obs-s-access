@@ -24,14 +24,14 @@ roles:
     - compliance-tools
   
   # Write access to implementation repositories
-  push:
+  write:
     - security-scanner
     - vulnerability-tracker
     - security-automation
     - policy-docs
   
   # Read access for monitoring and analysis
-  pull:
+  read:
     - security-scanner
     - vulnerability-tracker
     - incident-response
@@ -52,31 +52,31 @@ roles:
 # Expected Effective Permissions (GitHub takes highest):
 #
 # alice-security:
-#   - security-scanner: admin (highest of admin/push/pull)
-#   - vulnerability-tracker: admin (highest of admin/push/pull)
-#   - incident-response: admin (highest of admin/pull)
-#   - compliance-tools: admin (highest of admin/pull)
-#   - security-automation: push (only push granted)
-#   - audit-logs: pull (only pull granted)
-#   - policy-docs: push (highest of push/pull)
+#   - security-scanner: admin (highest of admin/write/read)
+#   - vulnerability-tracker: admin (highest of admin/write/read)
+#   - incident-response: admin (highest of admin/read)
+#   - compliance-tools: admin (highest of admin/read)
+#   - security-automation: write (only write granted)
+#   - audit-logs: read (only read granted)
+#   - policy-docs: write (highest of write/read)
 #
 # bob-infosec:
-#   - security-scanner: admin (highest of admin/push/pull)
-#   - vulnerability-tracker: admin (highest of admin/push/pull)
-#   - incident-response: admin (highest of admin/pull)
-#   - compliance-tools: admin (highest of admin/pull)
-#   - security-automation: push (only push granted)
-#   - audit-logs: pull (only pull granted)
-#   - policy-docs: push (highest of push/pull)
+#   - security-scanner: admin (highest of admin/write/read)
+#   - vulnerability-tracker: admin (highest of admin/write/read)
+#   - incident-response: admin (highest of admin/read)
+#   - compliance-tools: admin (highest of admin/read)
+#   - security-automation: write (only write granted)
+#   - audit-logs: read (only read granted)
+#   - policy-docs: write (highest of write/read)
 #
 # charlie-devsec:
-#   - security-scanner: push (highest of push/pull)
-#   - vulnerability-tracker: push (highest of push/pull)
-#   - security-automation: push (only push granted)
-#   - incident-response: pull (only pull granted)
-#   - audit-logs: pull (only pull granted)
-#   - compliance-tools: pull (only pull granted)
-#   - policy-docs: push (highest of push/pull)
+#   - security-scanner: write (highest of write/read)
+#   - vulnerability-tracker: write (highest of write/read)
+#   - security-automation: write (only write granted)
+#   - incident-response: read (only read granted)
+#   - audit-logs: read (only read granted)
+#   - compliance-tools: read (only read granted)
+#   - policy-docs: write (highest of write/read)
 #
 # Best Practices:
 #

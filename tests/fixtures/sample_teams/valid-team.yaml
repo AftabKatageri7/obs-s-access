@@ -5,10 +5,10 @@ users:
   - bob
   - charlie
 roles:
-  pull:
+  read:
     - repo-a
     - repo-b
-  push:
+  write:
     - repo-c
   admin:
     - repo-d
