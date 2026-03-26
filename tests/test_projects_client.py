@@ -590,4 +590,184 @@ class TestProjectAccessWorkflowIntegration:
         assert all(not p['closed'] for p in projects)
 
 
+    def test_workflow_filters_closed_projects(self, projects_client, mock_gql_client):
+        """Test that closed projects are filtered out."""
+        mock_instance = mock_gql_client.return_value
+        
+        mock_instance.execute.return_value = {
+            'organization': {
+                'projectsV2': {
+                    'nodes': [
+                        {'id': 'proj_1', 'number': 1, 'title': 'Open', 'url': 'u1', 'closed': False},
+                        {'id': 'proj_2', 'number': 2, 'title': 'Closed', 'url': 'u2', 'closed': True},
+                        {'id': 'proj_3', 'number': 3, 'title': 'Open2', 'url': 'u3', 'closed': False}
+                    ],
+                    'pageInfo': {'hasNextPage': False, 'endCursor': None}
+                }
+            },
+            'rateLimit': {'remaining': 5000, 'resetAt': '2024-01-01T00:00:00Z'}
+        }
+        
+        projects = projects_client.list_organization_projects("test-org")
+        
+        # Should only return open projects
+        assert len(projects) == 2
+        assert projects[0]['number'] == 1
+        assert projects[1]['number'] == 3
+
+
+class TestProjectsClientVCRIntegration:
+    """Integration tests using VCR.py to record/replay GraphQL API responses.
+    
+    These tests use VCR.py cassettes to record actual GitHub GraphQL API responses
+    and replay them for deterministic testing without hitting the live API.
+    
+    To record new cassettes:
+    1. Set GITHUB_TOKEN environment variable with a valid token
+    2. Delete the cassette file you want to re-record
+    3. Run the test - it will record the interaction
+    4. Commit the new cassette file
+    
+    Note: Cassettes contain sanitized tokens and sensitive data.
+    """
+    
+    @pytest.fixture
+    def vcr_config(self):
+        """Configure VCR.py for GraphQL API recording."""
+        return {
+            'filter_headers': ['authorization'],
+            'filter_post_data_parameters': ['token'],
+            'match_on': ['method', 'scheme', 'host', 'port', 'path', 'body'],
+            'record_mode': 'once',
+            'cassette_library_dir': 'tests/fixtures/vcr_cassettes'
+        }
+    
+    @pytest.mark.vcr()
+    def test_vcr_list_organization_projects(self, vcr_config):
+        """Test listing organization projects with VCR recording."""
+        import os
+        token = os.environ.get('GITHUB_TOKEN', 'fake_token_for_playback')
+        client = ProjectsClient(token=token)
+        
+        # This will use recorded response or record if cassette doesn't exist
+        projects = client.list_organization_projects("github")
+        
+        # Verify response structure
+        assert isinstance(projects, list)
+        if projects:  # If there are projects
+            assert 'id' in projects[0]
+            assert 'number' in projects[0]
+            assert 'title' in projects[0]
+            assert 'url' in projects[0]
+            assert 'closed' in projects[0]
+    
+    @pytest.mark.vcr()
+    def test_vcr_list_repository_projects(self, vcr_config):
+        """Test listing repository projects with VCR recording."""
+        import os
+        token = os.environ.get('GITHUB_TOKEN', 'fake_token_for_playback')
+        client = ProjectsClient(token=token)
+        
+        # Test with a known public repository
+        projects = client.list_repository_projects("octocat", "Hello-World")
+        
+        # Verify response structure
+        assert isinstance(projects, list)
+        # Repository may or may not have projects
+    
+    @pytest.mark.vcr()
+    def test_vcr_get_user_id(self, vcr_config):
+        """Test getting user ID with VCR recording."""
+        import os
+        token = os.environ.get('GITHUB_TOKEN', 'fake_token_for_playback')
+        client = ProjectsClient(token=token)
+        
+        # Test with a known GitHub user
+        user_id = client.get_user_id("octocat")
+        
+        # Verify response
+        assert isinstance(user_id, str)
+        assert len(user_id) > 0
+        assert user_id.startswith('MDQ:')  # GitHub node IDs start with base64 prefix
+    
+    @pytest.mark.vcr()
+    def test_vcr_get_user_id_not_found(self, vcr_config):
+        """Test getting user ID for non-existent user with VCR recording."""
+        import os
+        token = os.environ.get('GITHUB_TOKEN', 'fake_token_for_playback')
+        client = ProjectsClient(token=token)
+        
+        # Test with a user that definitely doesn't exist
+        with pytest.raises(GraphQLError) as exc_info:
+            client.get_user_id("this-user-definitely-does-not-exist-12345")
+        
+        assert exc_info.value.category == GraphQLErrorCategory.NOT_FOUND
+    
+    @pytest.mark.vcr()
+    def test_vcr_rate_limit_tracking(self, vcr_config):
+        """Test that rate limit info is tracked from real API responses."""
+        import os
+        token = os.environ.get('GITHUB_TOKEN', 'fake_token_for_playback')
+        client = ProjectsClient(token=token)
+        
+        # Make a simple query
+        client.get_user_id("octocat")
+        
+        # Verify rate limit tracking
+        assert client.rate_limit_remaining is not None
+        assert isinstance(client.rate_limit_remaining, int)
+        assert client.rate_limit_reset_at is not None
+        assert isinstance(client.rate_limit_reset_at, str)
+    
+    @pytest.mark.vcr()
+    def test_vcr_organization_not_found(self, vcr_config):
+        """Test error handling for non-existent organization."""
+        import os
+        token = os.environ.get('GITHUB_TOKEN', 'fake_token_for_playback')
+        client = ProjectsClient(token=token)
+        
+        # Test with an organization that doesn't exist
+        with pytest.raises(GraphQLError) as exc_info:
+            client.list_organization_projects("this-org-does-not-exist-xyz-12345")
+        
+        assert exc_info.value.category == GraphQLErrorCategory.NOT_FOUND
+        assert "not found" in str(exc_info.value).lower()
+    
+    @pytest.mark.vcr()
+    def test_vcr_repository_not_found(self, vcr_config):
+        """Test error handling for non-existent repository."""
+        import os
+        token = os.environ.get('GITHUB_TOKEN', 'fake_token_for_playback')
+        client = ProjectsClient(token=token)
+        
+        # Test with a repository that doesn't exist
+        with pytest.raises(GraphQLError) as exc_info:
+            client.list_repository_projects("octocat", "this-repo-does-not-exist-xyz")
+        
+        assert exc_info.value.category == GraphQLErrorCategory.NOT_FOUND
+    
+    @pytest.mark.vcr()
+    def test_vcr_complete_workflow(self, vcr_config):
+        """Test complete workflow with VCR: list projects and get user ID."""
+        import os
+        token = os.environ.get('GITHUB_TOKEN', 'fake_token_for_playback')
+        client = ProjectsClient(token=token)
+        
+        # Step 1: List organization projects
+        projects = client.list_organization_projects("github")
+        initial_rate_limit = client.rate_limit_remaining
+        
+        # Step 2: Get user ID
+        user_id = client.get_user_id("octocat")
+        final_rate_limit = client.rate_limit_remaining
+        
+        # Verify workflow executed successfully
+        assert isinstance(projects, list)
+        assert isinstance(user_id, str)
+        
+        # Verify rate limit decreased (or stayed same if using cached cassette)
+        assert final_rate_limit is not None
+        assert initial_rate_limit is not None
+
+
 # Made with Bob

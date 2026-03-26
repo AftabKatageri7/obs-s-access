@@ -1,0 +1,28 @@
+# Example: Organization-level GitHub Projects V2 access
+# This team configuration grants access to organization-level projects only
+
+team_name: "Platform Team"
+organization: "observability-s"
+repositories: []  # No repository access needed
+
+# Organization-level projects (visible at https://github.com/orgs/observability-s/projects)
+projects:
+  - number: 1
+    permission: "admin"
+    # Admin permission allows full project management
+    
+  - number: 5
+    permission: "write"
+    # Write permission allows editing project items and fields
+    
+  - number: 10
+    permission: "read"
+    # Read permission allows viewing project but not editing
+
+members:
+  - username: "alice-contractor"
+    role: "outside"
+  - username: "bob-consultant"
+    role: "outside"
+
+# Made with Bob

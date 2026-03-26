@@ -44,19 +44,25 @@ class ProjectsClient:
     with rate limiting, error handling, and retry logic.
     """
     
-    def __init__(self, token: str, base_url: str = "https://api.github.com/graphql"):
+    def __init__(self, token: str, base_url: str = "https://api.github.com/graphql",
+                 validate_scopes: bool = True):
         """
         Initialize the Projects API client.
         
         Args:
             token: GitHub personal access token with 'project' scope
             base_url: GraphQL API endpoint URL
+            validate_scopes: Whether to validate token scopes on initialization
         """
         self.token = token
         self.base_url = base_url
         self._client = None
         self._rate_limit_remaining = None
         self._rate_limit_reset_at = None
+        self._scopes_validated = False
+        
+        if validate_scopes:
+            self._validate_token_scopes()
         
     def _get_client(self) -> Client:
         """Get or create the GraphQL client instance."""
@@ -69,6 +75,60 @@ class ProjectsClient:
             )
             self._client = Client(transport=transport, fetch_schema_from_transport=False)
         return self._client
+    
+    def _validate_token_scopes(self) -> None:
+        """
+        Validate that the token has required scopes for project access.
+        
+        This method attempts a simple query to detect missing scopes early
+        and provide helpful error messages before operations fail.
+        """
+        if self._scopes_validated:
+            return
+            
+        try:
+            # Try a simple query that requires project scope
+            query = """
+            query {
+              viewer {
+                login
+              }
+              rateLimit {
+                remaining
+                resetAt
+              }
+            }
+            """
+            self._execute_with_retry(query, max_retries=1)
+            self._scopes_validated = True
+            logger.info("Token scopes validated successfully")
+            
+        except GraphQLError as e:
+            if e.category == GraphQLErrorCategory.AUTHENTICATION:
+                logger.error(
+                    "Token validation failed. Your GitHub token may be invalid or expired. "
+                    "Generate a new token with required scopes at: https://github.com/settings/tokens\n"
+                    "Required scopes:\n"
+                    "  - 'repo' or 'public_repo' (for repository access)\n"
+                    "  - 'project' with read/write permissions (for project access)\n"
+                    "  - 'read:org' (for private organization access, if needed)"
+                )
+                raise
+            elif e.category == GraphQLErrorCategory.PERMISSION_DENIED:
+                logger.warning(
+                    "Token may be missing required scopes. "
+                    "If you encounter permission errors, ensure your token has:\n"
+                    "  - 'repo' or 'public_repo' (for repository access)\n"
+                    "  - 'project' with read/write permissions (for project access)\n"
+                    "  - 'read:org' (for private organization access, if needed)\n"
+                    "Update your token at: https://github.com/settings/tokens"
+                )
+                # Don't raise - let operations proceed and fail with specific errors
+                self._scopes_validated = True
+            else:
+                # Other errors during validation - log but don't block
+                logger.debug(f"Token scope validation skipped due to error: {e}")
+                self._scopes_validated = True
     
     def _execute_with_retry(self, query: str, variables: Optional[Dict[str, Any]] = None,
                            max_retries: int = 3) -> Dict[str, Any]:
@@ -98,13 +158,20 @@ class ProjectsClient:
                 if 'rateLimit' in result:
                     self._rate_limit_remaining = result['rateLimit'].get('remaining')
                     self._rate_limit_reset_at = result['rateLimit'].get('resetAt')
+                    
+                    # Warn if rate limit is running low
+                    if self._rate_limit_remaining is not None and self._rate_limit_remaining < 100:
+                        logger.warning(
+                            f"GraphQL rate limit running low: {self._rate_limit_remaining} requests remaining. "
+                            f"Resets at: {self._rate_limit_reset_at}"
+                        )
                 
                 return result
                 
             except Exception as e:
                 error_message = str(e).lower()
                 
-                # Categorize the error
+                # Categorize the error and provide actionable messages
                 if 'rate limit' in error_message or 'secondary rate limit' in error_message:
                     category = GraphQLErrorCategory.RATE_LIMIT
                     if retry_count < max_retries:
@@ -113,12 +180,43 @@ class ProjectsClient:
                         time.sleep(wait_time)
                         retry_count += 1
                         continue
+                    else:
+                        user_message = (
+                            "GitHub API rate limit exceeded. "
+                            "Please wait a few minutes before retrying. "
+                            f"Original error: {str(e)}"
+                        )
                 elif 'unauthorized' in error_message or 'authentication' in error_message:
                     category = GraphQLErrorCategory.AUTHENTICATION
+                    user_message = (
+                        "Authentication failed. Please verify your GitHub token is valid and not expired. "
+                        "Generate a new token at: https://github.com/settings/tokens "
+                        f"Original error: {str(e)}"
+                    )
                 elif 'not found' in error_message or 'could not resolve' in error_message:
                     category = GraphQLErrorCategory.NOT_FOUND
+                    user_message = (
+                        "Resource not found. Please verify the organization, repository, or project exists "
+                        "and your token has access to it. "
+                        f"Original error: {str(e)}"
+                    )
                 elif 'forbidden' in error_message or 'permission' in error_message:
                     category = GraphQLErrorCategory.PERMISSION_DENIED
+                    if 'project' in error_message:
+                        user_message = (
+                            "Permission denied for project access. "
+                            "Your token must have 'project' scope (read/write) enabled. "
+                            "Update your token at: https://github.com/settings/tokens "
+                            f"Original error: {str(e)}"
+                        )
+                    else:
+                        user_message = (
+                            "Permission denied. Please verify your token has the required scopes: "
+                            "- 'repo' or 'public_repo' for repository access "
+                            "- 'project' (read/write) for project access "
+                            "Update your token at: https://github.com/settings/tokens "
+                            f"Original error: {str(e)}"
+                        )
                 elif 'network' in error_message or 'connection' in error_message:
                     category = GraphQLErrorCategory.NETWORK
                     if retry_count < max_retries:
@@ -127,11 +225,18 @@ class ProjectsClient:
                         time.sleep(wait_time)
                         retry_count += 1
                         continue
+                    else:
+                        user_message = (
+                            "Network connection error. Please check your internet connection "
+                            "and verify GitHub API is accessible. "
+                            f"Original error: {str(e)}"
+                        )
                 else:
                     category = GraphQLErrorCategory.UNKNOWN
+                    user_message = f"Unexpected GraphQL API error: {str(e)}"
                 
                 raise GraphQLError(
-                    f"GraphQL API error: {str(e)}",
+                    user_message,
                     category=category,
                     original_error=e
                 )
@@ -188,7 +293,9 @@ class ProjectsClient:
             org_data = result.get('organization')
             if not org_data:
                 raise GraphQLError(
-                    f"Organization '{org_name}' not found",
+                    f"Organization '{org_name}' not found. "
+                    f"Please verify the organization name is correct and your token has access to it. "
+                    f"If this is a private organization, ensure your token has 'read:org' scope.",
                     category=GraphQLErrorCategory.NOT_FOUND
                 )
             
@@ -249,7 +356,9 @@ class ProjectsClient:
             repo_data = result.get('repository')
             if not repo_data:
                 raise GraphQLError(
-                    f"Repository '{owner}/{repo}' not found",
+                    f"Repository '{owner}/{repo}' not found. "
+                    f"Please verify the repository name is correct and your token has access to it. "
+                    f"For private repositories, ensure your token has 'repo' scope.",
                     category=GraphQLErrorCategory.NOT_FOUND
                 )
             
@@ -313,7 +422,9 @@ class ProjectsClient:
             project_data = result.get('node')
             if not project_data:
                 raise GraphQLError(
-                    f"Project '{project_id}' not found",
+                    f"Project with ID '{project_id}' not found. "
+                    f"The project may have been deleted or your token may not have access to it. "
+                    f"Verify the project exists and your token has 'project' scope (read/write).",
                     category=GraphQLErrorCategory.NOT_FOUND
                 )
             
@@ -366,7 +477,9 @@ class ProjectsClient:
         user_data = result.get('user')
         if not user_data:
             raise GraphQLError(
-                f"User '{username}' not found",
+                f"User '{username}' not found on GitHub. "
+                f"Please verify the username is correct and the user account exists. "
+                f"Note: This tool only works with GitHub users, not organization accounts.",
                 category=GraphQLErrorCategory.NOT_FOUND
             )
         
@@ -417,8 +530,21 @@ class ProjectsClient:
             return True
         except GraphQLError as e:
             if e.category == GraphQLErrorCategory.PERMISSION_DENIED:
-                logger.error(f"Permission denied updating project collaborator: {e}")
-                raise
+                enhanced_message = (
+                    f"Permission denied when updating project collaborator. "
+                    f"Possible causes:\n"
+                    f"  1. Your token lacks 'project' scope (read/write)\n"
+                    f"  2. You don't have admin access to this project\n"
+                    f"  3. The project is closed or archived\n"
+                    f"Update your token at: https://github.com/settings/tokens\n"
+                    f"Original error: {e}"
+                )
+                logger.error(enhanced_message)
+                raise GraphQLError(
+                    enhanced_message,
+                    category=e.category,
+                    original_error=e.original_error
+                )
             raise
     
     def remove_project_collaborator(self, project_id: str, user_id: str) -> bool:
@@ -460,8 +586,21 @@ class ProjectsClient:
             return True
         except GraphQLError as e:
             if e.category == GraphQLErrorCategory.PERMISSION_DENIED:
-                logger.error(f"Permission denied removing project collaborator: {e}")
-                raise
+                enhanced_message = (
+                    f"Permission denied when removing project collaborator. "
+                    f"Possible causes:\n"
+                    f"  1. Your token lacks 'project' scope (read/write)\n"
+                    f"  2. You don't have admin access to this project\n"
+                    f"  3. The collaborator doesn't exist on this project\n"
+                    f"Update your token at: https://github.com/settings/tokens\n"
+                    f"Original error: {e}"
+                )
+                logger.error(enhanced_message)
+                raise GraphQLError(
+                    enhanced_message,
+                    category=e.category,
+                    original_error=e.original_error
+                )
             raise
     
     @property

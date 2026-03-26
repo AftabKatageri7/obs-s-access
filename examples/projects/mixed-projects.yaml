@@ -1,0 +1,42 @@
+# Example: Mixed organization and repository-level projects
+# This team configuration demonstrates access to both types of projects
+
+team_name: "DevOps Team"
+organization: "observability-s"
+
+# Repository access
+repositories:
+  - name: "obs-s-infrastructure"
+    permission: "push"
+  - name: "obs-s-deployment"
+    permission: "push"
+
+# Mixed project access: both organization-level and repository-level
+projects:
+  # Organization-level projects (no repository field)
+  - number: 1
+    permission: "admin"
+    # Org-level project for infrastructure planning
+    
+  - number: 5
+    permission: "write"
+    # Org-level project for deployment tracking
+    
+  # Repository-level projects (with repository field)
+  - number: 8
+    repository: "obs-s-infrastructure"
+    permission: "write"
+    # Repo-level project for infrastructure tasks
+    
+  - number: 12
+    repository: "obs-s-deployment"
+    permission: "admin"
+    # Repo-level project for deployment coordination
+
+members:
+  - username: "eve-devops"
+    role: "outside"
+  - username: "frank-sre"
+    role: "outside"
+
+# Made with Bob

@@ -17,7 +17,7 @@ from typing import List
 import pytest
 from unittest.mock import Mock, MagicMock, call
 
-from github_collab_manager.config_loader import ConfigLoader
+from github_collab_manager.config_loader import load_team_configs
 from github_collab_manager.manager import CollaboratorManager
 from github_collab_manager.audit_logger import AuditLogger
 from github_collab_manager.models import TeamConfig, RepositoryPermission, CollaboratorInfo
@@ -128,15 +128,14 @@ on-call:
         """Test complete workflow: load configs, plan changes, apply without stale removal."""
         # Setup
         logger = AuditLogger(str(audit_log_file))
-        loader = ConfigLoader()
         manager = CollaboratorManager(mock_github_client, logger)
         
         # Load all configuration files
-        config_files = [str(f) for f in sample_configs_dir.glob("*.yaml")]
-        configs = loader.load_configs(config_files)
+        configs, validation_result = load_team_configs(str(sample_configs_dir))
         
-        # Verify configurations loaded
-        assert len(configs) == 4  # 2 roles from engineering + 2 roles from operations
+        # Verify configurations loaded successfully
+        assert validation_result.valid, f"Config validation failed: {validation_result.errors}"
+        assert len(configs) == 2  # 2 config files: engineering.yaml and operations.yaml
         
         # Plan changes without removing stale collaborators
         plan = manager.plan_changes(configs, remove_stale=False)

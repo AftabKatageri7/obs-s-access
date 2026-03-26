@@ -783,4 +783,418 @@ class TestProjectAccessIntegration:
         mock_projects_client.update_project_collaborator.assert_not_called()
 
 
+class TestStaleProjectCollaborators:
+    """Tests for stale project collaborator detection and removal."""
+    
+    def test_detect_stale_project_collaborators_org_projects(self, mock_github_client, mock_logger):
+        """Test detecting stale collaborators on organization projects."""
+        from src.github_collab_manager.projects_client import ProjectsClient
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        mock_projects_client = Mock(spec=ProjectsClient)
+        
+        # Mock organization projects
+        mock_projects_client.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Board 1', 'url': 'url1', 'closed': False},
+            {'id': 'proj_2', 'number': 2, 'title': 'Board 2', 'url': 'url2', 'closed': False}
+        ]
+        
+        # Mock current collaborators - user3 is stale (not in team configs)
+        mock_projects_client.get_project_collaborators.side_effect = [
+            [{'login': 'user1'}, {'login': 'user3'}],  # Project 1
+            [{'login': 'user2'}, {'login': 'user3'}]   # Project 2
+        ]
+        
+        # Mock org membership check - user3 is NOT an org member
+        mock_org = Mock()
+        mock_member1 = Mock()
+        mock_member1.login = 'user1'
+        mock_member2 = Mock()
+        mock_member2.login = 'user2'
+        mock_org.get_members.return_value = [mock_member1, mock_member2]
+        mock_github_client._org = mock_org
+        
+        manager = CollaboratorManager(mock_github_client, mock_logger, mock_projects_client)
+        
+        team_configs = [
+            TeamConfig(
+                team_name="team1",
+                users=["user1"],
+                roles={},
+                projects=[ProjectConfig(number=1, permission=ProjectPermission.WRITE)],
+                source_file="team1.yaml"
+            ),
+            TeamConfig(
+                team_name="team2",
+                users=["user2"],
+                roles={},
+                projects=[ProjectConfig(number=2, permission=ProjectPermission.READ)],
+                source_file="team2.yaml"
+            )
+        ]
+        
+        stale = manager.detect_stale_project_collaborators(team_configs, "test-org")
+        
+        # Should detect user3 as stale on both projects
+        assert "org:1" in stale
+        assert "user3" in stale["org:1"]
+        assert "org:2" in stale
+        assert "user3" in stale["org:2"]
+    
+    def test_detect_stale_project_collaborators_repo_projects(self, mock_github_client, mock_logger):
+        """Test detecting stale collaborators on repository projects."""
+        from src.github_collab_manager.projects_client import ProjectsClient
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        mock_projects_client = Mock(spec=ProjectsClient)
+        
+        # Mock repository projects
+        mock_projects_client.list_repository_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Repo Board', 'url': 'url', 'closed': False}
+        ]
+        
+        # Mock current collaborators
+        mock_projects_client.get_project_collaborators.return_value = [
+            {'login': 'user1'},
+            {'login': 'stale_user'}
+        ]
+        
+        # Mock org membership check
+        mock_org = Mock()
+        mock_member = Mock()
+        mock_member.login = 'user1'
+        mock_org.get_members.return_value = [mock_member]
+        mock_github_client._org = mock_org
+        
+        manager = CollaboratorManager(mock_github_client, mock_logger, mock_projects_client)
+        
+        team_configs = [
+            TeamConfig(
+                team_name="team",
+                users=["user1"],
+                roles={},
+                projects=[
+                    ProjectConfig(number=1, permission=ProjectPermission.WRITE, repository="my-repo")
+                ],
+                source_file="team.yaml"
+            )
+        ]
+        
+        stale = manager.detect_stale_project_collaborators(team_configs, "test-org")
+        
+        # Should detect stale_user on repo project
+        assert "repo:my-repo:1" in stale
+        assert "stale_user" in stale["repo:my-repo:1"]
+        assert "user1" not in stale["repo:my-repo:1"]
+    
+    def test_detect_stale_project_collaborators_filters_org_members(self, mock_github_client, mock_logger):
+        """Test that organization members are filtered out from stale detection."""
+        from src.github_collab_manager.projects_client import ProjectsClient
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        mock_projects_client = Mock(spec=ProjectsClient)
+        
+        mock_projects_client.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Board', 'url': 'url', 'closed': False}
+        ]
+        
+        # Mock collaborators - org_member is an org member, outside_collab is not
+        mock_projects_client.get_project_collaborators.return_value = [
+            {'login': 'user1'},
+            {'login': 'org_member'},
+            {'login': 'outside_collab'}
+        ]
+        
+        # org_member is an org member, others are not
+        mock_org = Mock()
+        mock_member1 = Mock()
+        mock_member1.login = 'user1'
+        mock_member2 = Mock()
+        mock_member2.login = 'org_member'
+        mock_org.get_members.return_value = [mock_member1, mock_member2]
+        mock_github_client._org = mock_org
+        
+        manager = CollaboratorManager(mock_github_client, mock_logger, mock_projects_client)
+        
+        team_configs = [
+            TeamConfig(
+                team_name="team",
+                users=["user1"],
+                roles={},
+                projects=[ProjectConfig(number=1, permission=ProjectPermission.WRITE)],
+                source_file="team.yaml"
+            )
+        ]
+        
+        stale = manager.detect_stale_project_collaborators(team_configs, "test-org")
+        
+        # Should only detect outside_collab as stale (org_member filtered out)
+        assert "org:1" in stale
+        assert "outside_collab" in stale["org:1"]
+        assert "org_member" not in stale["org:1"]
+        assert "user1" not in stale["org:1"]
+    
+    def test_detect_stale_project_collaborators_no_stale(self, mock_github_client, mock_logger):
+        """Test when there are no stale collaborators."""
+        from src.github_collab_manager.projects_client import ProjectsClient
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        mock_projects_client = Mock(spec=ProjectsClient)
+        
+        mock_projects_client.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Board', 'url': 'url', 'closed': False}
+        ]
+        
+        # All current collaborators are in team configs
+        mock_projects_client.get_project_collaborators.return_value = [
+            {'login': 'user1'},
+            {'login': 'user2'}
+        ]
+        
+        # Mock org with no members (all are outside collaborators)
+        mock_org = Mock()
+        mock_org.get_members.return_value = []
+        mock_github_client._org = mock_org
+        
+        manager = CollaboratorManager(mock_github_client, mock_logger, mock_projects_client)
+        
+        team_configs = [
+            TeamConfig(
+                team_name="team",
+                users=["user1", "user2"],
+                roles={},
+                projects=[ProjectConfig(number=1, permission=ProjectPermission.WRITE)],
+                source_file="team.yaml"
+            )
+        ]
+        
+        stale = manager.detect_stale_project_collaborators(team_configs, "test-org")
+        
+        # Should return empty dict
+        assert len(stale) == 0
+    
+    def test_detect_stale_project_collaborators_mixed_projects(self, mock_github_client, mock_logger):
+        """Test detecting stale collaborators across org and repo projects."""
+        from src.github_collab_manager.projects_client import ProjectsClient
+        from src.github_collab_manager.models import TeamConfig, ProjectConfig, ProjectPermission
+        
+        mock_projects_client = Mock(spec=ProjectsClient)
+        
+        # Mock both org and repo projects
+        mock_projects_client.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Org Board', 'url': 'url1', 'closed': False}
+        ]
+        mock_projects_client.list_repository_projects.return_value = [
+            {'id': 'proj_2', 'number': 2, 'title': 'Repo Board', 'url': 'url2', 'closed': False}
+        ]
+        
+        # Mock collaborators
+        mock_projects_client.get_project_collaborators.side_effect = [
+            [{'login': 'user1'}, {'login': 'stale1'}],  # Org project
+            [{'login': 'user2'}, {'login': 'stale2'}]   # Repo project
+        ]
+        
+        # Mock org with no members
+        mock_org = Mock()
+        mock_org.get_members.return_value = []
+        mock_github_client._org = mock_org
+        
+        manager = CollaboratorManager(mock_github_client, mock_logger, mock_projects_client)
+        
+        team_configs = [
+            TeamConfig(
+                team_name="team",
+                users=["user1", "user2"],
+                roles={},
+                projects=[
+                    ProjectConfig(number=1, permission=ProjectPermission.WRITE),
+                    ProjectConfig(number=2, permission=ProjectPermission.READ, repository="repo")
+                ],
+                source_file="team.yaml"
+            )
+        ]
+        
+        stale = manager.detect_stale_project_collaborators(team_configs, "test-org")
+        
+        # Should detect stale users on both project types
+        assert "org:1" in stale
+        assert "stale1" in stale["org:1"]
+        assert "repo:repo:2" in stale
+        assert "stale2" in stale["repo:repo:2"]
+    
+    def test_remove_stale_project_collaborators_dry_run(self, mock_github_client, mock_logger):
+        """Test removing stale project collaborators in dry-run mode."""
+        from src.github_collab_manager.projects_client import ProjectsClient
+        
+        mock_projects_client = Mock(spec=ProjectsClient)
+        
+        # Mock project details
+        mock_projects_client.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Board', 'url': 'url', 'closed': False}
+        ]
+        
+        manager = CollaboratorManager(mock_github_client, mock_logger, mock_projects_client)
+        
+        stale_collaborators = {
+            "org:1": ["stale_user1", "stale_user2"]
+        }
+        
+        errors = manager.remove_stale_project_collaborators(
+            stale_collaborators,
+            "test-org",
+            dry_run=True
+        )
+        
+        # Should not actually remove in dry-run mode
+        mock_projects_client.remove_project_collaborator.assert_not_called()
+        
+        # Should log dry-run actions
+        assert mock_logger.log_info.call_count >= 2
+        
+        # Should return no errors
+        assert len(errors) == 0
+    
+    def test_remove_stale_project_collaborators_actual_removal(self, mock_github_client, mock_logger):
+        """Test actually removing stale project collaborators."""
+        from src.github_collab_manager.projects_client import ProjectsClient
+        
+        mock_projects_client = Mock(spec=ProjectsClient)
+        
+        # Mock project details
+        mock_projects_client.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Board', 'url': 'url', 'closed': False}
+        ]
+        
+        # Mock get_user_id to return a user ID
+        mock_projects_client.get_user_id.return_value = 'user_id_123'
+        
+        # Mock successful removal
+        mock_projects_client.remove_project_collaborator.return_value = None
+        
+        manager = CollaboratorManager(mock_github_client, mock_logger, mock_projects_client)
+        
+        stale_collaborators = {
+            "org:1": ["stale_user"]
+        }
+        
+        errors = manager.remove_stale_project_collaborators(
+            stale_collaborators,
+            "test-org",
+            dry_run=False
+        )
+        
+        # Should get user ID
+        mock_projects_client.get_user_id.assert_called_once_with('stale_user')
+        
+        # Should actually remove with user ID
+        mock_projects_client.remove_project_collaborator.assert_called_once_with(
+            'proj_1',
+            'user_id_123'
+        )
+        
+        # Should log removal
+        mock_logger.log_project_operation.assert_called()
+        
+        # Should return no errors
+        assert len(errors) == 0
+    
+    def test_remove_stale_project_collaborators_handles_errors(self, mock_github_client, mock_logger):
+        """Test error handling when removal fails."""
+        from src.github_collab_manager.projects_client import ProjectsClient
+        
+        mock_projects_client = Mock(spec=ProjectsClient)
+        
+        # Mock project details
+        mock_projects_client.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Board', 'url': 'url', 'closed': False}
+        ]
+        
+        # Mock get_user_id
+        mock_projects_client.get_user_id.return_value = 'user_id_123'
+        
+        # Mock removal failure
+        mock_projects_client.remove_project_collaborator.side_effect = Exception("API error")
+        
+        manager = CollaboratorManager(mock_github_client, mock_logger, mock_projects_client)
+        
+        stale_collaborators = {
+            "org:1": ["stale_user"]
+        }
+        
+        errors = manager.remove_stale_project_collaborators(
+            stale_collaborators,
+            "test-org",
+            dry_run=False
+        )
+        
+        # Should return error message
+        assert len(errors) == 1
+        assert "stale_user" in errors[0]
+        assert "#1" in errors[0]  # Project number should be in error
+    
+    def test_remove_stale_project_collaborators_repo_projects(self, mock_github_client, mock_logger):
+        """Test removing stale collaborators from repository projects."""
+        from src.github_collab_manager.projects_client import ProjectsClient
+        
+        mock_projects_client = Mock(spec=ProjectsClient)
+        
+        # Mock repository project details
+        mock_projects_client.list_repository_projects.return_value = [
+            {'id': 'proj_1', 'number': 5, 'title': 'Repo Board', 'url': 'url', 'closed': False}
+        ]
+        
+        mock_projects_client.remove_project_collaborator.return_value = None
+        
+        manager = CollaboratorManager(mock_github_client, mock_logger, mock_projects_client)
+        
+        stale_collaborators = {
+            "repo:my-repo:5": ["stale_user"]
+        }
+        
+        errors = manager.remove_stale_project_collaborators(
+            stale_collaborators,
+            "test-org",
+            dry_run=False
+        )
+        
+        # Should call list_repository_projects with correct repo name
+        mock_projects_client.list_repository_projects.assert_called_with("test-org", "my-repo")
+        
+        # Should remove collaborator
+        mock_projects_client.remove_project_collaborator.assert_called_once()
+        
+        assert len(errors) == 0
+    
+    def test_remove_stale_project_collaborators_project_not_found(self, mock_github_client, mock_logger):
+        """Test handling when project doesn't exist during removal."""
+        from src.github_collab_manager.projects_client import ProjectsClient
+        
+        mock_projects_client = Mock(spec=ProjectsClient)
+        
+        # Project 999 doesn't exist
+        mock_projects_client.list_organization_projects.return_value = [
+            {'id': 'proj_1', 'number': 1, 'title': 'Board', 'url': 'url', 'closed': False}
+        ]
+        
+        manager = CollaboratorManager(mock_github_client, mock_logger, mock_projects_client)
+        
+        stale_collaborators = {
+            "org:999": ["stale_user"]  # Project doesn't exist
+        }
+        
+        errors = manager.remove_stale_project_collaborators(
+            stale_collaborators,
+            "test-org",
+            dry_run=False
+        )
+        
+        # Should return error for nonexistent project
+        assert len(errors) == 1
+        assert "999" in errors[0]
+        assert "not found" in errors[0].lower()
+        
+        # Should not attempt removal
+        mock_projects_client.remove_project_collaborator.assert_not_called()
+
+
 # Made with Bob

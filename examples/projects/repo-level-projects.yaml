@@ -1,0 +1,30 @@
+# Example: Repository-level GitHub Projects V2 access
+# This team configuration grants access to projects attached to specific repositories
+
+team_name: "Backend Team"
+organization: "observability-s"
+
+# Repository access (required for repository-level projects)
+repositories:
+  - name: "obs-s-backend"
+    permission: "pull"
+
+# Repository-level projects (attached to specific repositories)
+projects:
+  - number: 3
+    repository: "obs-s-backend"
+    permission: "write"
+    # Project #3 is attached to obs-s-backend repository
+    
+  - number: 7
+    repository: "obs-s-backend"
+    permission: "read"
+    # Project #7 is also attached to obs-s-backend repository
+
+members:
+  - username: "charlie-dev"
+    role: "outside"
+  - username: "diana-engineer"
+    role: "outside"
+
+# Made with Bob

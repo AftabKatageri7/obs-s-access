@@ -36,11 +36,11 @@ def parse_arguments(args: Optional[List[str]] = None) -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(
         prog="github-collab-manager",
-        description="Manage GitHub repository collaborators using YAML team definitions",
+        description="Manage GitHub repository collaborators and GitHub Projects v2 access using YAML team definitions",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Basic usage - Apply team configurations
+  # Basic usage - Apply team configurations (repositories and projects)
   # (requires GITHUB_TOKEN and GITHUB_ORG environment variables)
   github-collab-manager --teams-dir ./teams
 
@@ -74,6 +74,33 @@ Examples:
     --report-stale \\
     --log-level INFO
 
+Team Configuration Format:
+  YAML files in the teams directory can define both repository and project access:
+
+  team_name: backend-team
+  members:
+    - username: alice
+    - username: bob
+  repositories:
+    - name: api-service
+      role: write
+    - name: database-migrations
+      role: admin
+  projects:
+    - number: 1              # Organization project #1
+      permission: write
+    - number: 5              # Organization project #5
+      permission: read
+    - number: 3              # Repository project #3
+      permission: admin
+      repository: api-service
+
+  Repository roles: pull, triage, push, maintain, admin
+  Project permissions: read, write, admin
+
+  Note: The 'projects' section is optional for backward compatibility.
+  Projects without 'repository' field are organization-level projects.
+
 Environment Variables:
   GITHUB_TOKEN    GitHub personal access token (required unless --github-token used)
   GITHUB_ORG      GitHub organization name (required unless --github-org used)
@@ -83,6 +110,7 @@ Required Permissions:
   Your GitHub token must have the following scopes:
   - repo (full control of private repositories)
   - read:org (read organization membership)
+  - project (full control of projects) - Required for GitHub Projects v2 access
 
 Exit Codes:
   0   Success - all operations completed successfully
@@ -365,6 +393,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             for error_msg in project_error_messages:
                 logger.log_error(f"Project access error: {error_msg}")
         
+        # Check if any teams have project configurations
+        has_projects = any(tc.projects for tc in team_configs)
+        
         # Handle stale collaborator detection and removal
         stale_results = []
         if args.remove_stale or args.report_stale:
@@ -393,6 +424,44 @@ def main(argv: Optional[List[str]] = None) -> int:
             else:
                 logger.log_info("No stale collaborators found")
         
+        # Handle stale project collaborator detection and removal
+        project_stale_errors = []
+        stale_project_collaborators = {}
+        if (args.remove_stale or args.report_stale) and has_projects:
+            logger.log_info("Detecting stale project collaborators")
+            stale_project_collaborators = manager.detect_stale_project_collaborators(
+                team_configs, org_name
+            )
+            
+            if stale_project_collaborators:
+                total_stale_projects = sum(len(users) for users in stale_project_collaborators.values())
+                logger.log_info(
+                    f"Found {total_stale_projects} stale project collaborator(s) across {len(stale_project_collaborators)} projects"
+                )
+                
+                if args.report_stale:
+                    # Report only mode
+                    logger.log_info("Stale project collaborators (--report-stale mode):")
+                    for project_id, users in sorted(stale_project_collaborators.items()):
+                        # Format project identifier for display
+                        if project_id.startswith("org:"):
+                            display_name = f"Organization Project #{project_id.split(':')[1]}"
+                        else:  # repo:REPO_NAME:PROJECT_NUMBER
+                            parts = project_id.split(":", 2)
+                            display_name = f"Repository Project #{parts[2]} ({parts[1]})"
+                        logger.log_info(f"  {display_name}: {', '.join(users)}")
+                
+                if args.remove_stale:
+                    # Remove stale project collaborators
+                    logger.log_info("Removing stale project collaborators")
+                    project_stale_errors = manager.remove_stale_project_collaborators(
+                        stale_project_collaborators,
+                        org_name,
+                        dry_run=args.dry_run
+                    )
+            else:
+                logger.log_info("No stale project collaborators found")
+        
         # Analyze results and generate summary
         all_results = results + stale_results
         success_count = sum(1 for r in all_results if r.success)
@@ -404,6 +473,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         no_changes = sum(1 for r in results if r.success and r.action == "no-op")
         removals = sum(1 for r in stale_results if r.success and r.action == "remove")
         
+        # Calculate project stale removal statistics
+        project_stale_removal_count = 0
+        if stale_project_collaborators:
+            # Count total stale collaborators that were processed
+            project_stale_removal_count = sum(len(users) for users in stale_project_collaborators.values())
+            # Subtract errors (failed removals)
+            project_stale_removal_count -= len(project_stale_errors)
+        
         logger.log_info(
             f"Repository operations: {success_count} successful, {failure_count} failed",
             total_operations=len(all_results),
@@ -412,11 +489,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             repo_additions=additions,
             repo_updates=updates,
             repo_no_changes=no_changes,
-            repo_removals=removals
+            repo_removals=removals,
+            project_stale_removals=project_stale_removal_count,
+            project_stale_errors=len(project_stale_errors)
         )
         
-        # Check if any teams have project configurations
-        has_projects = any(tc.projects for tc in team_configs)
+        # Count project errors
         project_error_count = len(project_error_messages)
         
         if has_projects:
@@ -451,6 +529,16 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print("     (See audit log for details)")
             else:
                 print(f"  ✅ Completed successfully")
+            
+            # Show project stale removal statistics if applicable
+            if project_stale_removal_count > 0 or len(project_stale_errors) > 0:
+                print()
+                print("Project stale collaborator cleanup:")
+                if project_stale_removal_count > 0:
+                    print(f"  🗑️  Removals:        {project_stale_removal_count}")
+                if len(project_stale_errors) > 0:
+                    print(f"  ❌ Errors:          {len(project_stale_errors)}")
+                    print("     (See audit log for details)")
             print()
         
         # Show affected repositories
@@ -509,6 +597,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1
         
     except Exception as e:
+        import traceback
         logger.log_error(
             f"Unexpected error: {str(e)}",
             error_type=type(e).__name__,
@@ -517,6 +606,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"\n❌ ERROR: Unexpected error occurred", file=sys.stderr)
         print(f"   Type: {type(e).__name__}", file=sys.stderr)
         print(f"   Message: {str(e)}", file=sys.stderr)
+        print(f"\n   Traceback:", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
         print("\n   Please report this issue with the full error log", file=sys.stderr)
         return 1
 

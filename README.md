@@ -5,6 +5,8 @@ A Python CLI tool for managing GitHub repository collaborators using YAML-based 
 ## Features
 
 - **YAML-Based Configuration**: Define teams and their repository access in simple YAML files
+- **GitHub Projects V2 Support**: Manage collaborator access to organization and repository project boards
+- **Unified Access Management**: Configure both repository and project permissions in a single YAML file
 - **Conflict Resolution**: Automatic handling of overlapping permissions with alphabetical file precedence
 - **Dry-Run Mode**: Preview changes before applying them
 - **Validate-Only Mode**: Validate YAML configurations without connecting to GitHub
@@ -113,9 +115,14 @@ github-collab-manager --teams-dir ./teams --github-token your_token --github-org
 
 **Important**: This tool requires a **fine-grained personal access token**. Classic tokens are not supported by the organization.
 
-Your fine-grained token must have the following **repository permissions**:
+Your fine-grained token must have the following permissions:
+
+**Repository Permissions** (for repository collaborator management):
 - **Administration**: Read and write
 - **Metadata**: Read
+
+**Organization Permissions** (for GitHub Projects V2 management):
+- **Projects**: Read and write
 
 To create a fine-grained token:
 1. Go to GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens
@@ -125,7 +132,11 @@ To create a fine-grained token:
 5. Under "Repository permissions", set:
    - **Administration**: Read and write
    - **Metadata**: Read
-6. Click "Generate token" and copy it securely
+6. Under "Organization permissions", set:
+   - **Projects**: Read and write
+7. Click "Generate token" and copy it securely
+
+**Note**: If you only need repository management (not projects), the Projects permission is optional. The tool will skip project operations if the token lacks this scope.
 
 ### Team Configuration Files
 
@@ -145,6 +156,17 @@ roles:
     - frontend-app
   admin:
     - infrastructure-repo
+projects:  # Optional: GitHub Projects V2 access
+  org_projects:
+    write:
+      - 1    # Main development board
+      - 5    # Backend sprint planning
+    read:
+      - 3    # Company-wide roadmap
+  repo_projects:
+    write:
+      - repo: api-service
+        project: 2    # API feature tracking
 ```
 
 **Valid Roles:**
@@ -206,9 +228,34 @@ roles:
 5. **Duplicate users**: Same user can appear in multiple team files (last file alphabetically wins for conflicts)
 6. **Duplicate repositories**: Same repository can appear under multiple roles in the same file (highest permission wins)
 
+#### Projects Section (Optional)
+
+The `projects:` section allows you to manage GitHub Projects V2 access alongside repository permissions:
+
+```yaml
+projects:
+  org_projects:      # Organization-level projects
+    <permission>:    # read, write, or admin
+      - <project-number>
+      - <project-number>
+  repo_projects:     # Repository-level projects
+    <permission>:    # read, write, or admin
+      - repo: <repository-name>
+        project: <project-number>
+```
+
+**Project Numbers**: Find the project number in the project URL:
+- Organization project: `https://github.com/orgs/observability-s/projects/1` → project number is `1`
+- Repository project: `https://github.com/observability-s/repo-name/projects/2` → project number is `2`
+
+**Valid Project Permissions**:
+- `read` - View project and items
+- `write` - Edit project items and settings
+- `admin` - Full project administration
+
 #### Conflict Resolution
 
-When the same user appears in multiple team files with different permissions for the same repository:
+When the same user appears in multiple team files with different permissions for the same repository or project:
 
 1. **Alphabetical precedence**: Files are processed in alphabetical order
 2. **Last-wins**: The last file processed (alphabetically) determines the final permission
@@ -216,9 +263,9 @@ When the same user appears in multiple team files with different permissions for
 
 Example:
 ```
-teams/a-backend.yaml:  alice → api-service (push)
-teams/b-security.yaml: alice → api-service (admin)
-Result: alice gets admin access (b-security.yaml wins)
+teams/a-backend.yaml:  alice → api-service (push), project 1 (read)
+teams/b-security.yaml: alice → api-service (admin), project 1 (write)
+Result: alice gets admin access to repository and write access to project (b-security.yaml wins)
 ```
 
 ## Usage
@@ -283,7 +330,27 @@ github-collab-manager --teams-dir examples/teams --remove-stale
 github-collab-manager --teams-dir examples/teams --remove-stale --dry-run
 ```
 
-**Note**: Organization members are automatically excluded from stale collaborator detection and removal, as they have implicit access to repositories.
+**Note**: Organization members are automatically excluded from stale collaborator detection and removal, as they have implicit access to repositories and projects.
+
+### Manage GitHub Projects Access
+
+Grant collaborators access to GitHub Projects (v2) boards:
+
+```bash
+# Apply project access defined in team YAML files
+github-collab-manager --teams-dir examples/teams
+
+# Dry-run: preview project access changes
+github-collab-manager --teams-dir examples/teams --dry-run
+
+# Report stale project collaborators
+github-collab-manager --teams-dir examples/teams --report-stale
+
+# Remove stale project collaborators
+github-collab-manager --teams-dir examples/teams --remove-stale
+```
+
+**Note**: Project access management requires the `project` scope in your GitHub token. If the token lacks this scope, project operations will be skipped with a warning.
 
 ## Command-Line Options
 
@@ -353,7 +420,7 @@ All operations are logged in JSON format with:
 
 ## Examples
 
-### Example 1: Backend Team
+### Example 1: Backend Team with Repository and Project Access
 
 File: `examples/teams/backend-team.yaml`
 
@@ -368,11 +435,25 @@ roles:
     - data-processor
   pull:
     - frontend-app
+projects:
+  org_projects:
+    write:
+      - 1    # Main development board
+      - 5    # Backend sprint planning
+    read:
+      - 3    # Company-wide roadmap
+  repo_projects:
+    write:
+      - repo: api-service
+        project: 2    # API feature tracking
 ```
 
 Result:
 - `alice` and `bob` get `push` access to `api-service` and `data-processor`
 - `alice` and `bob` get `pull` access to `frontend-app`
+- `alice` and `bob` get `write` access to organization projects 1 and 5
+- `alice` and `bob` get `read` access to organization project 3
+- `alice` and `bob` get `write` access to the api-service repository project 2
 
 ### Example 2: DevOps Team
 
@@ -420,6 +501,31 @@ roles:
 
 Result:
 - `eve` gets `push` access to `api-service` (b-senior-team.yaml wins alphabetically)
+
+### Example 6: Project Managers with Only Project Access
+
+File: `examples/teams/project-managers.yaml`
+
+```yaml
+team_name: project-managers
+users:
+  - pm-alice
+  - pm-bob
+roles: {}    # No repository access needed
+projects:
+  org_projects:
+    admin:
+      - 1    # Main development board
+      - 5    # Backend sprint planning
+      - 6    # Frontend sprint planning
+    write:
+      - 3    # Company-wide roadmap
+```
+
+Result:
+- `pm-alice` and `pm-bob` get `admin` access to sprint planning boards
+- `pm-alice` and `pm-bob` get `write` access to the roadmap
+- No repository access is granted (empty `roles:` section)
 
 ## Troubleshooting
 

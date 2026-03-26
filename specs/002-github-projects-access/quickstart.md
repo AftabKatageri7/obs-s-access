@@ -53,31 +53,34 @@ Add a `projects:` section to your existing team configuration files.
 
 ```yaml
 team_name: Backend Engineering Team
-users:
-  - alice-dev
-  - bob-engineer
-  - charlie-backend
+members:
+  - username: "alice-dev"
+  - username: "bob-engineer"
+  - username: "charlie-backend"
 
 # Existing repository access (unchanged)
-roles:
-  write:
-    - observability-api
-    - metrics-collector
-  read:
-    - shared-utils
+repositories:
+  - name: "observability-s/observability-api"
+    permission: "write"
+  - name: "observability-s/metrics-collector"
+    permission: "write"
+  - name: "observability-s/shared-utils"
+    permission: "read"
 
 # NEW: Project access configuration
 projects:
-  org_projects:
-    write:
-      - 1    # Main development board
-      - 5    # Backend sprint planning
-    read:
-      - 3    # Company-wide roadmap
-  repo_projects:
-    admin:
-      - repo: observability-api
-        project: 1    # API feature tracking
+  # Organization-level projects (no repository field)
+  - number: 1
+    permission: "write"  # Main development board
+  - number: 5
+    permission: "write"  # Backend sprint planning
+  - number: 3
+    permission: "read"   # Company-wide roadmap
+  
+  # Repository-level projects (with repository field)
+  - number: 1
+    repository: "observability-s/observability-api"
+    permission: "admin"  # API feature tracking
 ```
 
 ### Step 2: Validate Configuration
@@ -135,20 +138,21 @@ Some users may need project access without repository access (e.g., project mana
 
 ```yaml
 team_name: Project Management Team
-users:
-  - pm-alice
-  - pm-bob
+members:
+  - username: "pm-alice"
+  - username: "pm-bob"
 
-roles: {}    # No repository access
+repositories: []    # No repository access
 
 projects:
-  org_projects:
-    admin:
-      - 1    # Main development board
-      - 5    # Backend sprint planning
-      - 6    # Frontend sprint planning
-    write:
-      - 3    # Company-wide roadmap
+  - number: 1
+    permission: "admin"  # Main development board
+  - number: 5
+    permission: "admin"  # Backend sprint planning
+  - number: 6
+    permission: "admin"  # Frontend sprint planning
+  - number: 3
+    permission: "write"  # Company-wide roadmap
 ```
 
 ### Scenario 2: Different Permissions Across Projects
@@ -159,23 +163,23 @@ Users can have different permission levels for different projects.
 
 ```yaml
 team_name: DevOps Team
-users:
-  - frank-ops
-  - grace-sre
+members:
+  - username: "frank-ops"
+  - username: "grace-sre"
 
-roles:
-  admin:
-    - observability-api
-    - metrics-collector
+repositories:
+  - name: "observability-s/observability-api"
+    permission: "admin"
+  - name: "observability-s/metrics-collector"
+    permission: "admin"
 
 projects:
-  org_projects:
-    admin:
-      - 1    # Main development board (full control)
-    write:
-      - 5    # Backend sprint planning (can edit)
-    read:
-      - 3    # Company-wide roadmap (view only)
+  - number: 1
+    permission: "admin"  # Main development board (full control)
+  - number: 5
+    permission: "write"  # Backend sprint planning (can edit)
+  - number: 3
+    permission: "read"   # Company-wide roadmap (view only)
 ```
 
 ### Scenario 3: Repository-Level Projects
@@ -186,25 +190,26 @@ Grant access to projects associated with specific repositories.
 
 ```yaml
 team_name: Frontend Team
-users:
-  - diana-ui
-  - evan-frontend
+members:
+  - username: "diana-ui"
+  - username: "evan-frontend"
 
-roles:
-  write:
-    - dashboard-app
+repositories:
+  - name: "observability-s/dashboard-app"
+    permission: "write"
 
 projects:
-  org_projects:
-    read:
-      - 1    # Main development board
-  repo_projects:
-    write:
-      - repo: dashboard-app
-        project: 2    # Dashboard feature tracking
-    read:
-      - repo: shared-utils
-        project: 1    # Shared components roadmap
+  # Organization-level project
+  - number: 1
+    permission: "read"  # Main development board
+  
+  # Repository-level projects
+  - number: 2
+    repository: "observability-s/dashboard-app"
+    permission: "write"  # Dashboard feature tracking
+  - number: 1
+    repository: "observability-s/shared-utils"
+    permission: "read"   # Shared components roadmap
 ```
 
 ### Scenario 4: Update Existing Permissions
@@ -214,17 +219,15 @@ To change a user's project permission, simply update the YAML file and re-run th
 **Before**: `teams/backend-team.yaml`
 ```yaml
 projects:
-  org_projects:
-    read:
-      - 1    # alice-dev has read access
+  - number: 1
+    permission: "read"  # alice-dev has read access
 ```
 
 **After**: `teams/backend-team.yaml`
 ```yaml
 projects:
-  org_projects:
-    write:
-      - 1    # alice-dev now has write access
+  - number: 1
+    permission: "write"  # alice-dev now has write access
 ```
 
 **Run**:
@@ -323,12 +326,12 @@ Add comments in your YAML files to document what each project number represents:
 
 ```yaml
 projects:
-  org_projects:
-    write:
-      - 1    # Main development board
-      - 5    # Backend sprint planning
-    read:
-      - 3    # Company-wide roadmap
+  - number: 1
+    permission: "write"  # Main development board
+  - number: 5
+    permission: "write"  # Backend sprint planning
+  - number: 3
+    permission: "read"   # Company-wide roadmap
 ```
 
 ### 4. Regular Access Reviews
@@ -370,14 +373,14 @@ Convert your documented access to YAML format:
 
 ```yaml
 team_name: Existing Project Access
-users:
-  - user1
-  - user2
+members:
+  - username: "user1"
+  - username: "user2"
 projects:
-  org_projects:
-    write:
-      - 1
-      - 2
+  - number: 1
+    permission: "write"
+  - number: 2
+    permission: "write"
 ```
 
 ### Step 3: Validate with Dry-Run

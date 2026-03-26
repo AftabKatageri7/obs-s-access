@@ -2,8 +2,8 @@ from setuptools import setup, find_packages
 
 setup(
     name="github-collab-manager",
-    version="0.1.0",
-    description="Manage GitHub repository collaborators using YAML-based team definitions",
+    version="0.2.0",
+    description="Manage GitHub repository collaborators and GitHub Projects v2 access using YAML-based team definitions",
     author="observability-s",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
@@ -11,6 +11,9 @@ setup(
     install_requires=[
         "PyGithub>=2.1.0",
         "PyYAML>=6.0",
+        "python-dotenv>=1.0.0",
+        "gql[requests]>=3.5.0",
+        "pydantic>=2.0.0",
     ],
     extras_require={
         "dev": [
