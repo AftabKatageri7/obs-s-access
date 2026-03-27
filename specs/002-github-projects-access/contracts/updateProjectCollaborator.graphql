@@ -10,17 +10,16 @@ mutation UpdateProjectCollaborator($projectId: ID!, $userId: ID!, $role: Project
     }
   ) {
     collaborators {
-      userId
-      role
+      totalCount
     }
   }
 }
 
-# Valid ProjectV2Roles values:
-# - READ: View-only access
-# - WRITE: Can edit project items and views
-# - ADMIN: Full control including project settings
-# - NONE: Removes access (use for removal)
+# Valid ProjectV2Roles values (GitHub API enum):
+# - READER: View-only access (maps from 'read')
+# - WRITER: Can edit project items and views (maps from 'write')
+# - ADMIN: Full control including project settings (maps from 'admin')
+# - NONE: Removes access (maps from 'none', or use removeProjectV2Collaborator mutation)
 
 # Example Variables (Add/Update):
 # {
@@ -33,15 +32,16 @@ mutation UpdateProjectCollaborator($projectId: ID!, $userId: ID!, $role: Project
 # {
 #   "data": {
 #     "updateProjectV2Collaborators": {
-#       "collaborators": [
-#         {
-#           "userId": "U_kgDOABCDEF",
-#           "role": "WRITE"
-#         }
-#       ]
+#       "collaborators": {
+#         "totalCount": 1
+#       }
 #     }
 #   }
 # }
+#
+# Note: The collaborators field returns ProjectV2ActorConnection type,
+# which doesn't expose individual userId/role fields in the response.
+# The mutation succeeds if no errors are returned.
 
 # Note: To get userId, first query the user:
 # query GetUserId($login: String!) {

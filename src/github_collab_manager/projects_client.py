@@ -169,10 +169,19 @@ class ProjectsClient:
                 return result
                 
             except Exception as e:
-                error_message = str(e).lower()
+                error_str = str(e)
+                error_message = error_str.lower()
                 
+                # Check for GraphQL schema errors first (before generic patterns)
+                if 'undefinedfield' in error_message or "doesn't exist on type" in error_message:
+                    category = GraphQLErrorCategory.UNKNOWN
+                    user_message = (
+                        f"GraphQL schema error - the query uses fields that don't exist in GitHub's API. "
+                        f"This is likely a bug in the application code. "
+                        f"Original error: {error_str}"
+                    )
                 # Categorize the error and provide actionable messages
-                if 'rate limit' in error_message or 'secondary rate limit' in error_message:
+                elif 'rate limit' in error_message or 'secondary rate limit' in error_message:
                     category = GraphQLErrorCategory.RATE_LIMIT
                     if retry_count < max_retries:
                         wait_time = backoff_seconds * (2 ** retry_count)
@@ -448,7 +457,7 @@ class ProjectsClient:
         Args:
             project_id: Project node ID
             user_id: User node ID
-            permission: Permission level (READ, WRITE, ADMIN)
+            permission: Permission level (read, write, admin)
             
         Returns:
             True if successful
@@ -456,8 +465,28 @@ class ProjectsClient:
         Raises:
             GraphQLError: On API errors
         """
+        # Map permission values to GitHub's ProjectV2Roles enum
+        # GitHub uses: NONE, READER, WRITER, ADMIN
+        # We accept: read, write, admin (case-insensitive)
+        permission_map = {
+            'read': 'READER',
+            'write': 'WRITER',
+            'admin': 'ADMIN',
+            'none': 'NONE'
+        }
+        
+        role = permission_map.get(permission.lower())
+        if not role:
+            raise GraphQLError(
+                f"Invalid permission level '{permission}'. "
+                f"Valid values are: read, write, admin",
+                category=GraphQLErrorCategory.UNKNOWN
+            )
+        
         # Note: Using updateProjectV2Collaborators (plural) with ProjectV2Roles
-        # This is the correct mutation according to GitHub's GraphQL schema
+        # The response doesn't include userId/role fields - GitHub's API returns
+        # ProjectV2ActorConnection which doesn't expose these fields
+        # Note: rateLimit cannot be queried in mutations, only in queries
         mutation = """
         mutation($projectId: ID!, $userId: ID!, $role: ProjectV2Roles!) {
           updateProjectV2Collaborators(input: {
@@ -465,13 +494,8 @@ class ProjectsClient:
             collaborators: [{userId: $userId, role: $role}]
           }) {
             collaborators {
-              userId
-              role
+              totalCount
             }
-          }
-          rateLimit {
-            remaining
-            resetAt
           }
         }
         """
@@ -479,7 +503,7 @@ class ProjectsClient:
         variables = {
             "projectId": project_id,
             "userId": user_id,
-            "role": permission.upper()
+            "role": role
         }
         
         try:
@@ -518,6 +542,7 @@ class ProjectsClient:
         Raises:
             GraphQLError: On API errors
         """
+        # Note: rateLimit cannot be queried in mutations, only in queries
         mutation = """
         mutation($projectId: ID!, $userId: ID!) {
           removeProjectV2Collaborator(input: {
@@ -525,10 +550,6 @@ class ProjectsClient:
             userId: $userId
           }) {
             clientMutationId
-          }
-          rateLimit {
-            remaining
-            resetAt
           }
         }
         """

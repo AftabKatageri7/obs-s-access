@@ -344,40 +344,41 @@ class GitHubClient:
         
         try:
             rate_limit = self._github.get_rate_limit()
-            # PyGithub v2.x: rate_limit is a RateLimit object with resources attribute
-            # Access core rate limit through resources.core
-            core = rate_limit.core
-            return {
-                'limit': core.limit,
-                'remaining': core.remaining,
-                'reset_timestamp': int(core.reset.timestamp())
-            }
+            
+            # Try different PyGithub API structures
+            # PyGithub 2.x: RateLimitOverview with resources attribute
+            if hasattr(rate_limit, 'resources') and hasattr(rate_limit.resources, 'core'):
+                core = rate_limit.resources.core
+                return {
+                    'limit': core.limit,
+                    'remaining': core.remaining,
+                    'reset_timestamp': int(core.reset.timestamp())
+                }
+            # Fallback: try raw_data
+            if hasattr(rate_limit, 'raw_data'):
+                data = rate_limit.raw_data
+                if 'resources' in data and 'core' in data['resources']:
+                    core_data = data['resources']['core']
+                    return {
+                        'limit': core_data['limit'],
+                        'remaining': core_data['remaining'],
+                        'reset_timestamp': core_data['reset']
+                    }
+            
+            # If none of the above work, log and return empty
+            self.logger.log_debug(
+                "Rate limit structure not recognized",
+                rate_limit_type=type(rate_limit).__name__,
+                available_attrs=dir(rate_limit)
+            )
+            return {}
+            
         except AttributeError as e:
-            # Fallback for different PyGithub API versions
-            self.logger.log_warning(
-                "Rate limit API structure not recognized, attempting fallback",
+            self.logger.log_debug(
+                "Rate limit attribute error",
                 error=str(e)
             )
-            try:
-                # Try accessing as dictionary (older versions or different structure)
-                if hasattr(rate_limit, 'raw_data'):
-                    data = rate_limit.raw_data
-                    if 'resources' in data and 'core' in data['resources']:
-                        core_data = data['resources']['core']
-                        return {
-                            'limit': core_data['limit'],
-                            'remaining': core_data['remaining'],
-                            'reset_timestamp': core_data['reset']
-                        }
-                # If we can't parse it, return empty dict
-                self.logger.log_warning("Unable to parse rate limit information")
-                return {}
-            except (KeyError, TypeError, AttributeError) as fallback_error:
-                self.logger.log_warning(
-                    "Rate limit fallback parsing failed",
-                    error=str(fallback_error)
-                )
-                return {}
+            return {}
         except Exception as e:
             self.logger.log_error("Error getting rate limit", error=e)
             return {}
