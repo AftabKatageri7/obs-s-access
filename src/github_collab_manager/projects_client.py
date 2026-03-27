@@ -440,7 +440,7 @@ class ProjectsClient:
         
         return user_data['id']
     
-    def update_project_collaborator(self, project_id: str, user_id: str, 
+    def update_project_collaborator(self, project_id: str, user_id: str,
                                    permission: str) -> bool:
         """
         Update or add a collaborator to a project.
@@ -456,15 +456,17 @@ class ProjectsClient:
         Raises:
             GraphQLError: On API errors
         """
+        # Note: Using updateProjectV2Collaborators (plural) with ProjectV2Roles
+        # This is the correct mutation according to GitHub's GraphQL schema
         mutation = """
-        mutation($projectId: ID!, $userId: ID!, $permission: ProjectV2Permission!) {
-          updateProjectV2Collaborator(input: {
+        mutation($projectId: ID!, $userId: ID!, $role: ProjectV2Roles!) {
+          updateProjectV2Collaborators(input: {
             projectId: $projectId
-            userId: $userId
-            permission: $permission
+            collaborators: [{userId: $userId, role: $role}]
           }) {
-            collaborator {
-              login
+            collaborators {
+              userId
+              role
             }
           }
           rateLimit {
@@ -477,7 +479,7 @@ class ProjectsClient:
         variables = {
             "projectId": project_id,
             "userId": user_id,
-            "permission": permission.upper()
+            "role": permission.upper()
         }
         
         try:
