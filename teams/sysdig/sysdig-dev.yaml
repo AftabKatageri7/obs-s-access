@@ -4,6 +4,7 @@
 team_name: Sysdig Dev Team
 
 users:
+  - sysdig-i-sync
   - arturodilecce
   - carlosteaches
   - ctolon22
@@ -20,6 +21,7 @@ users:
   - janoe
   - nkarri
   - adri-rojasv
+  - balinaveen
 
 roles:
 
