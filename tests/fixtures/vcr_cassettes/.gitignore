@@ -1,7 +1,0 @@
-# VCR.py cassettes may contain sensitive data
-# Only commit sanitized cassettes after manual review
-*.yaml
-*.json
-
-# Allow this .gitignore file
-!.gitignore

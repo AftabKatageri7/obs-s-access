@@ -1,0 +1,35 @@
+teams:
+- name: IBM-Maintainers
+  description: The IBM team with Maintainer permission. This team can be added to
+    individual repos with Maintainer access.
+  privacy: closed
+  members:
+  - username: haberc
+    role: maintainer
+  - username: adityacs
+    role: maintainer
+  - username: jrsimpson91
+    role: maintainer
+- name: IBM-Writers
+  description: The IBM team with Writer permission. This team can be added to individual
+    repos with Writer access.
+  privacy: closed
+  members:
+  - username: bbosze
+    role: member
+  - username: norbertkovacs95
+    role: member
+  - username: torsten-schlegel
+    role: member
+  - username: IBMevangill
+    role: member
+  - username: jffraley-ibm
+    role: member
+  - username: abhijitthakur1
+    role: member
+  - username: Roopa-Ramanathan
+    role: member
+  - username: ArunChandharRavi
+    role: member
+  - username: Pruthvi-Nagaraja
+    role: member
