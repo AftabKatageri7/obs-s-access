@@ -1,0 +1,349 @@
+repositories:
+- name: sysdig-support
+  collaborators:
+  - username: jdeiviz
+    permission: write
+  - username: janoe
+    permission: write
+  - username: figarocorso
+    permission: write
+  - username: bennythejudge
+    permission: write
+  - username: mvalin
+    permission: write
+  - username: nkarri
+    permission: write
+  - username: ctolon22
+    permission: write
+  - username: ramirezalfredo
+    permission: write
+  - username: balinaveen
+    permission: write
+  - username: carlosteaches
+    permission: write
+  - username: vcaldaralo
+    permission: write
+  - username: arturodilecce
+    permission: write
+  - username: rperezcr
+    permission: write
+  - username: darroyo-sysdig
+    permission: write
+  - username: massimoschembri
+    permission: write
+  - username: adri-rojasv
+    permission: write
+  - username: rfungu
+    permission: write
+  - username: sysdig-i-sync
+    permission: write
+- name: sysdig-charts
+  collaborators:
+  - username: jdeiviz
+    permission: write
+  - username: janoe
+    permission: write
+  - username: figarocorso
+    permission: write
+  - username: bennythejudge
+    permission: write
+  - username: mvalin
+    permission: write
+  - username: nkarri
+    permission: write
+  - username: ctolon22
+    permission: write
+  - username: ramirezalfredo
+    permission: write
+  - username: balinaveen
+    permission: write
+  - username: carlosteaches
+    permission: write
+  - username: vcaldaralo
+    permission: write
+  - username: arturodilecce
+    permission: write
+  - username: rperezcr
+    permission: write
+  - username: darroyo-sysdig
+    permission: write
+  - username: massimoschembri
+    permission: write
+  - username: adri-rojasv
+    permission: write
+  - username: rfungu
+    permission: write
+  - username: sysdig-i-sync
+    permission: write
+- name: sysdig-argo-applications
+  collaborators:
+  - username: jdeiviz
+    permission: write
+  - username: janoe
+    permission: write
+  - username: figarocorso
+    permission: write
+  - username: bennythejudge
+    permission: write
+  - username: mvalin
+    permission: write
+  - username: nkarri
+    permission: write
+  - username: ctolon22
+    permission: write
+  - username: ramirezalfredo
+    permission: write
+  - username: balinaveen
+    permission: write
+  - username: carlosteaches
+    permission: write
+  - username: vcaldaralo
+    permission: write
+  - username: arturodilecce
+    permission: write
+  - username: rperezcr
+    permission: write
+  - username: darroyo-sysdig
+    permission: write
+  - username: massimoschembri
+    permission: write
+  - username: adri-rojasv
+    permission: write
+  - username: rfungu
+    permission: write
+  - username: sysdig-i-sync
+    permission: write
+- name: sysdig-runbooks
+  collaborators:
+  - username: jdeiviz
+    permission: write
+  - username: janoe
+    permission: write
+  - username: figarocorso
+    permission: write
+  - username: bennythejudge
+    permission: write
+  - username: mvalin
+    permission: write
+  - username: nkarri
+    permission: write
+  - username: ctolon22
+    permission: write
+  - username: ramirezalfredo
+    permission: write
+  - username: balinaveen
+    permission: write
+  - username: carlosteaches
+    permission: write
+  - username: vcaldaralo
+    permission: write
+  - username: arturodilecce
+    permission: write
+  - username: rperezcr
+    permission: write
+  - username: darroyo-sysdig
+    permission: write
+  - username: massimoschembri
+    permission: write
+  - username: adri-rojasv
+    permission: write
+  - username: rfungu
+    permission: write
+  - username: sysdig-i-sync
+    permission: write
+- name: sysdig-smoke-tests
+  collaborators:
+  - username: jdeiviz
+    permission: write
+  - username: janoe
+    permission: write
+  - username: figarocorso
+    permission: write
+  - username: bennythejudge
+    permission: write
+  - username: mvalin
+    permission: write
+  - username: nkarri
+    permission: write
+  - username: ctolon22
+    permission: write
+  - username: ramirezalfredo
+    permission: write
+  - username: balinaveen
+    permission: write
+  - username: carlosteaches
+    permission: write
+  - username: vcaldaralo
+    permission: write
+  - username: arturodilecce
+    permission: write
+  - username: rperezcr
+    permission: write
+  - username: darroyo-sysdig
+    permission: write
+  - username: massimoschembri
+    permission: write
+  - username: adri-rojasv
+    permission: write
+  - username: rfungu
+    permission: write
+  - username: sysdig-i-sync
+    permission: write
+- name: sysdig-terraform-modules
+  collaborators:
+  - username: jdeiviz
+    permission: write
+  - username: janoe
+    permission: write
+  - username: figarocorso
+    permission: write
+  - username: bennythejudge
+    permission: write
+  - username: mvalin
+    permission: write
+  - username: nkarri
+    permission: write
+  - username: ctolon22
+    permission: write
+  - username: ramirezalfredo
+    permission: write
+  - username: balinaveen
+    permission: write
+  - username: carlosteaches
+    permission: write
+  - username: vcaldaralo
+    permission: write
+  - username: arturodilecce
+    permission: write
+  - username: rperezcr
+    permission: write
+  - username: darroyo-sysdig
+    permission: write
+  - username: massimoschembri
+    permission: write
+  - username: adri-rojasv
+    permission: write
+  - username: rfungu
+    permission: write
+  - username: sysdig-i-sync
+    permission: write
+- name: sysdig-project-management
+  collaborators:
+  - username: jdeiviz
+    permission: write
+  - username: janoe
+    permission: write
+  - username: figarocorso
+    permission: write
+  - username: bennythejudge
+    permission: write
+  - username: mvalin
+    permission: write
+  - username: nkarri
+    permission: write
+  - username: ctolon22
+    permission: write
+  - username: ramirezalfredo
+    permission: write
+  - username: balinaveen
+    permission: write
+  - username: carlosteaches
+    permission: write
+  - username: vcaldaralo
+    permission: write
+  - username: arturodilecce
+    permission: write
+  - username: rperezcr
+    permission: write
+  - username: darroyo-sysdig
+    permission: write
+  - username: massimoschembri
+    permission: write
+  - username: adri-rojasv
+    permission: write
+  - username: rfungu
+    permission: write
+  - username: sysdig-i-sync
+    permission: write
+- name: sysdig-architecture-compliance
+  collaborators:
+  - username: jdeiviz
+    permission: write
+  - username: janoe
+    permission: write
+  - username: figarocorso
+    permission: write
+  - username: bennythejudge
+    permission: write
+  - username: mvalin
+    permission: write
+  - username: nkarri
+    permission: write
+  - username: ctolon22
+    permission: write
+  - username: ramirezalfredo
+    permission: write
+  - username: balinaveen
+    permission: write
+  - username: carlosteaches
+    permission: write
+  - username: vcaldaralo
+    permission: write
+  - username: arturodilecce
+    permission: write
+  - username: rperezcr
+    permission: write
+  - username: darroyo-sysdig
+    permission: write
+  - username: massimoschembri
+    permission: write
+  - username: adri-rojasv
+    permission: write
+  - username: rfungu
+    permission: write
+  - username: sysdig-i-sync
+    permission: write
+- name: sysdig-dashboards-alerts
+  collaborators:
+  - username: jdeiviz
+    permission: write
+  - username: janoe
+    permission: write
+  - username: figarocorso
+    permission: write
+  - username: bennythejudge
+    permission: write
+  - username: mvalin
+    permission: write
+  - username: nkarri
+    permission: write
+  - username: ctolon22
+    permission: write
+  - username: ramirezalfredo
+    permission: write
+  - username: balinaveen
+    permission: write
+  - username: carlosteaches
+    permission: write
+  - username: vcaldaralo
+    permission: write
+  - username: arturodilecce
+    permission: write
+  - username: rperezcr
+    permission: write
+  - username: darroyo-sysdig
+    permission: write
+  - username: massimoschembri
+    permission: write
+  - username: adri-rojasv
+    permission: write
+  - username: rfungu
+    permission: write
+  - username: sysdig-i-sync
+    permission: write
+- name: obs-s-access
+  collaborators: []
+- name: obs-s-scaffolding
+  collaborators: []
+
+# Made with Bob
