@@ -25,7 +25,7 @@ locals {
 resource "github_repository_collaborator" "collaborator" {
   for_each = { for collab in local.collaborators_flat : "${collab.repository}-${collab.username}" => collab }
 
-  repository = each.value.repository
-  username   = each.value.username
-  permission = each.value.permission
+  repository                  = each.value.repository
+  username                    = each.value.username
+  permission                  = each.value.permission
 }
