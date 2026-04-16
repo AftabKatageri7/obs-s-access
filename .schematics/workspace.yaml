@@ -46,8 +46,8 @@ environments:
       - name: github_organization
         value: observability-s
       - name: teams_config_file
-        value: teams.yaml
+        value: ../teams.yaml
       - name: collaborators_config_file
-        value: collaborators.yaml
+        value: ../collaborators.yaml
 
 # Made with Bob
