@@ -9,7 +9,7 @@ defaults:
     templateRepo:
       url: https://github.com/observability-s/obs-s-access
     templateData:
-      folder: .
+      folder: terraform
       type: terraform_v1.5
   
   # Secure variables - linked to Secrets Manager, not stored in workspace

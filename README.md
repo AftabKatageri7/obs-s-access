@@ -20,19 +20,20 @@ This Terraform configuration manages GitHub organization access control includin
 
 ```
 .
-├── main.tf                      # Main Terraform configuration
-├── variables.tf                 # Input variables
 ├── teams.yaml                   # Teams configuration
 ├── collaborators.yaml           # External collaborators configuration
-├── modules/
-│   ├── teams/                   # Teams module
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   └── outputs.tf
-│   └── collaborators/           # Collaborators module
-│       ├── main.tf
-│       ├── variables.tf
-│       └── outputs.tf
+├── terraform/                   # Terraform configuration
+│   ├── main.tf                  # Main Terraform configuration
+│   ├── variables.tf             # Input variables
+│   └── modules/
+│       ├── teams/               # Teams module
+│       │   ├── main.tf
+│       │   ├── variables.tf
+│       │   └── outputs.tf
+│       └── collaborators/       # Collaborators module
+│           ├── main.tf
+│           ├── variables.tf
+│           └── outputs.tf
 ├── scripts/                     # Helper scripts
 │   ├── generate-teams-config.py # Generate teams.yaml
 │   ├── generate-collaborators-config.py # Generate collaborators.yaml
@@ -69,7 +70,8 @@ vim collaborators.yaml
 export TF_VAR_github_obs_s_automation_token="$GITHUB_TOKEN"
 export TF_VAR_github_organization="observability-s"
 
-# Initialize and apply
+# Initialize and apply (from terraform directory)
+cd terraform
 terraform init
 terraform plan
 terraform apply
@@ -151,6 +153,9 @@ repositories:
 ### 4. Initialize and Apply
 
 ```bash
+# Change to terraform directory
+cd terraform
+
 # Initialize Terraform
 terraform init
 

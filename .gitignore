@@ -1,5 +1,6 @@
 # Local .terraform directories
 **/.terraform/*
+terraform/.terraform/*
 
 # Bob directories
 .bob/
@@ -8,6 +9,8 @@
 # .tfstate files
 *.tfstate
 *.tfstate.*
+terraform/*.tfstate
+terraform/*.tfstate.*
 
 # .lock.hcl files
 *.terraform.lock.hcl

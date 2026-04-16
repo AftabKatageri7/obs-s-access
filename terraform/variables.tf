@@ -14,11 +14,11 @@ variable "github_organization" {
 variable "teams_config_file" {
   description = "Path to the YAML file containing team configurations"
   type        = string
-  default     = "teams.yaml"
+  default     = "../teams.yaml"
 }
 
 variable "collaborators_config_file" {
   description = "Path to the YAML file containing external collaborator configurations"
   type        = string
-  default     = "collaborators.yaml"
+  default     = "../collaborators.yaml"
 }
