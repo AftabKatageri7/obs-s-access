@@ -1,5 +1,5 @@
-variable "github_token" {
-  description = "GitHub personal access token with appropriate permissions"
+variable "github_obs_s_automation_token" {
+  description = "GitHub personal access token with appropriate permissions for observability-s automation"
   type        = string
   sensitive   = true
   default     = ""

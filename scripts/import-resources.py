@@ -14,11 +14,11 @@ import requests
 from typing import Dict, List, Optional
 
 class TerraformImporter:
-    def __init__(self, org_name: str, github_token: str):
+    def __init__(self, org_name: str, github_obs_s_automation_token: str):
         self.org_name = org_name
-        self.github_token = github_token
+        self.github_obs_s_automation_token = github_obs_s_automation_token
         self.headers = {
-            'Authorization': f'token {github_token}',
+            'Authorization': f'token {github_obs_s_automation_token}',
             'Accept': 'application/vnd.github.v3+json'
         }
         self.teams_cache = None
@@ -327,15 +327,15 @@ def main():
     org_name = sys.argv[1] if len(sys.argv) > 1 else 'observability-s'
     
     # Get GitHub token from environment
-    github_token = os.environ.get('GITHUB_TOKEN')
+    github_obs_s_automation_token = os.environ.get('GITHUB_TOKEN')
     
-    if not github_token:
+    if not github_obs_s_automation_token:
         print("Error: GITHUB_TOKEN environment variable not set")
         print(f"Usage: export GITHUB_TOKEN=your_token && python3 {sys.argv[0]} <org-name>")
         return 1
         
     # Run importer
-    importer = TerraformImporter(org_name, github_token)
+    importer = TerraformImporter(org_name, github_obs_s_automation_token)
     return importer.run()
 
 if __name__ == '__main__':

@@ -10,7 +10,7 @@ terraform {
 }
 
 provider "github" {
-  token = var.github_token != "" ? var.github_token : null
+  token = var.github_obs_s_automation_token != "" ? var.github_obs_s_automation_token : null
   owner = var.github_organization != "" ? var.github_organization : null
 }
 
