@@ -1,0 +1,53 @@
+# Schematics Workspace Configuration
+# This file defines workspace metadata, variable definitions, and environment-specific overrides
+
+# Default values applied to all environments unless overridden
+defaults:
+  workspace:
+    type: terraform_v1.5
+    description: Schematics workspace for driving membership and permission changes to the Observability-S Github organization
+    templateRepo:
+      url: https://github.com/observability-s/obs-s-access
+    templateData:
+      folder: .
+      type: terraform_v1.5
+  
+  # Secure variables - linked to Secrets Manager, not stored in workspace
+  # See https://github.com/observability-s/obs-s-schematics-scaffolding/tree/main/config for details
+  secure_variables:
+    - name: github_obs_s_automation_token
+      type: string
+      description: Github token for performing automated adminstrative tasks within https://github.com/observability-s/
+  
+  # Regular variables - can have defaults that are overridden per environment
+  variables:
+    - name: github_organization
+      type: string
+      description: Github token for performing automated adminstrative tasks within https://github.com/observability-s/
+    - name: teams_config_file
+      type: string
+      description: Local file containing the team names and IBM-only member mappings
+    - name: collaborators_config_file
+      type: string
+      description: Local file containing the external collaborator names per repo and permission mappings
+
+# Environment-specific configurations
+environments:
+  dev:
+    workspace:
+      name: obs-s-access
+      resource_group: sysdig-ibm-dev
+      tags:
+        - env:dev
+        - owner:devops-team
+    
+    # Override variable values for dev environment
+    values:
+      - name: github_organization
+        value: observability-s
+      - name: teams_config_file
+        value: teams.yaml
+      - name: collaborators_config_file
+        value: collaborators.yaml
+
+# Made with Bob

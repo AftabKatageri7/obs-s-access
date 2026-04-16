@@ -66,7 +66,7 @@ vim teams.yaml
 vim collaborators.yaml
 
 # Set Terraform environment variables (recommended approach)
-export TF_VAR_github_token="$GITHUB_TOKEN"
+export TF_VAR_github_obs_s_automation_token="$GITHUB_TOKEN"
 export TF_VAR_github_organization="observability-s"
 
 # Initialize and apply
@@ -87,7 +87,7 @@ If you're creating a new organization or want to start from scratch:
 
 Set Terraform environment variables (recommended):
 ```bash
-export TF_VAR_github_token="your_github_token_here"
+export TF_VAR_github_obs_s_automation_token="your_github_token_here"
 export TF_VAR_github_organization="observability-s"
 ```
 
