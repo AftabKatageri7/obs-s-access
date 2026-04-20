@@ -1,0 +1,56 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "messages": {
+        "$i18n": "locales.yml"
+    },
+    "title": {
+        "$ref": "#/messages/deploy.title"
+    },
+    "description": {
+        "$ref": "#/messages/deploy.description"
+    },
+    "longDescription": {
+        "$ref": "#/messages/deploy.longDescription"
+    },
+    "type": "object",
+    "properties": {
+        "api-key": {
+            "description": {
+                "$ref": "#/messages/deploy.apikey"
+            },
+            "type": "string",
+            "validator": {
+                "v-type": "api-key"
+            }
+        },
+        "workspace-id": {
+            "description": {
+                "$ref": "#/messages/deploy.workspace-id"
+            },
+            "type": "string"
+        }
+    },
+    "required": [
+        "api-key",
+        "workspace-id"
+    ],
+    "form": [{
+            "type": "validator",
+            "url": "/devops/validator/validator-v1.html"
+        },
+        {
+            "type": "text",
+            "readonly": false,
+            "title": "Workspace Id",
+            "key": "workspace-id"
+        },
+        {
+            "type": "password",
+            "readonly": false,
+            "title": {
+                "$ref": "#/messages/deploy.apikey"
+            },
+            "key": "api-key"
+        }
+    ]
+}
