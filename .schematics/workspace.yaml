@@ -4,14 +4,15 @@
 # Default values applied to all environments unless overridden
 defaults:
   workspace:
-    type: terraform_v1.5
+    type: terraform_v1.12
     description: Schematics workspace for driving membership and permission changes to the Observability-S Github organization
     templateRepo:
       url: https://github.com/observability-s/obs-s-access
     templateData:
       folder: terraform
-      type: terraform_v1.5
-  
+      type: terraform_v1.12
+    state_file_path:
+
   # Secure variables - linked to Secrets Manager, not stored in workspace
   # See https://github.com/observability-s/obs-s-schematics-scaffolding/tree/main/config for details
   secure_variables:
@@ -39,7 +40,6 @@ environments:
       resource_group: sysdig-ibm-dev
       tags:
         - env:dev
-        - owner:devops-team
     
     # Override variable values for dev environment
     values:
