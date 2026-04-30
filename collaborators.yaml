@@ -41,6 +41,8 @@ repositories:
     permission: push
   - username: josesolisrosales
     permission: push
+  - username: luca-sysdig
+    permission: push
 - name: sysdig-charts
   collaborators:
   - username: jdeiviz
@@ -82,6 +84,8 @@ repositories:
   - username: mbreitung
     permission: push
   - username: josesolisrosales
+    permission: push
+  - username: luca-sysdig
     permission: push
 - name: sysdig-argo-applications
   collaborators:
@@ -125,6 +129,8 @@ repositories:
     permission: push
   - username: josesolisrosales
     permission: push
+  - username: luca-sysdig
+    permission: push
 - name: sysdig-runbooks
   collaborators:
   - username: jdeiviz
@@ -166,6 +172,8 @@ repositories:
   - username: mbreitung
     permission: push
   - username: josesolisrosales
+    permission: push
+  - username: luca-sysdig
     permission: push
 - name: sysdig-smoke-tests
   collaborators:
@@ -209,6 +217,8 @@ repositories:
     permission: push
   - username: josesolisrosales
     permission: push
+  - username: luca-sysdig
+    permission: push
 - name: sysdig-terraform-modules
   collaborators:
   - username: jdeiviz
@@ -250,6 +260,8 @@ repositories:
   - username: mbreitung
     permission: push
   - username: josesolisrosales
+    permission: push
+  - username: luca-sysdig
     permission: push
 - name: sysdig-project-management
   collaborators:
@@ -293,6 +305,8 @@ repositories:
     permission: push
   - username: josesolisrosales
     permission: push
+  - username: luca-sysdig
+    permission: push
 - name: sysdig-architecture-compliance
   collaborators:
   - username: jdeiviz
@@ -335,6 +349,8 @@ repositories:
     permission: push
   - username: josesolisrosales
     permission: push
+  - username: luca-sysdig
+    permission: push
 - name: sysdig-dashboards-alerts
   collaborators:
   - username: jdeiviz
@@ -376,6 +392,8 @@ repositories:
   - username: mbreitung
     permission: push
   - username: josesolisrosales
+    permission: push
+  - username: luca-sysdig
     permission: push
 - name: obs-s-access
   collaborators: []
