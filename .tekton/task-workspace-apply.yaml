@@ -48,20 +48,27 @@ spec:
           ibmcloud target -g sysdig-ibm-dev
           
           # Install Schematics plugin if not present
-          if ! ibmcloud plugin list | grep -q schematics; then
+          echo "Checking for Schematics plugin..."
+          if ! ibmcloud plugin list | grep -q "schematics"; then
             echo "Installing Schematics plugin..."
-            ibmcloud plugin install schematics -f
+            ibmcloud plugin install schematics -f -r "IBM Cloud"
+          else
+            echo "Schematics plugin already installed"
           fi
+          
+          # Verify plugin is available
+          echo "Installed plugins:"
+          ibmcloud plugin list
 
-          # run terraform apply
-          echo "ibmcloud terraform apply --id $WORKSPACE_ID --force"
-          ACTIVITY=$(ibmcloud terraform apply -id $WORKSPACE_ID --json --force)
+          # run schematics apply
+          echo "ibmcloud schematics apply --id $WORKSPACE_ID --force"
+          ACTIVITY=$(ibmcloud schematics apply --id $WORKSPACE_ID --json --force)
           ACTIVITY_ID=$(echo $ACTIVITY | jq -r ".activityid")
           echo "Activity ID   $ACTIVITY_ID"
           # poll until status is no longer INPROGRESS, or if there is an error
           while :
           do
-            STATUS=$(ibmcloud terraform workspace action --id $WORKSPACE_ID --act-id $ACTIVITY_ID --json)
+            STATUS=$(ibmcloud schematics workspace action --id $WORKSPACE_ID --act-id $ACTIVITY_ID --json)
             
             RET_VAL=$?
             if [ $RET_VAL -ne 0 ]; then
@@ -71,13 +78,13 @@ spec:
               STATUS_VALUE=$(echo $STATUS | jq -r ".status")
               echo "Polling for status: $STATUS_VALUE"
               if [ "$STATUS_VALUE" = "FAILED" ]; then
-                ibmcloud terraform logs --id $WORKSPACE_ID --act-id $ACTIVITY_ID
+                ibmcloud schematics logs --id $WORKSPACE_ID --act-id $ACTIVITY_ID
                 exit 1
-              elif [ "$STATUS_VALUE" != "INPROGRESS" ]; then  
+              elif [ "$STATUS_VALUE" != "INPROGRESS" ]; then
                 break
               fi
             fi
             # sleep for 5 seconds, while waiting for completion
             sleep 5
           done
-          ibmcloud terraform logs --id $WORKSPACE_ID --act-id $ACTIVITY_ID
+          ibmcloud schematics logs --id $WORKSPACE_ID --act-id $ACTIVITY_ID

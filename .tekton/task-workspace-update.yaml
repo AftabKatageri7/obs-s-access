@@ -53,13 +53,20 @@ spec:
           ibmcloud target -g sysdig-ibm-dev
           
           # Install Schematics plugin if not present
-          if ! ibmcloud plugin list | grep -q schematics; then
+          echo "Checking for Schematics plugin..."
+          if ! ibmcloud plugin list | grep -q "schematics"; then
             echo "Installing Schematics plugin..."
-            ibmcloud plugin install schematics -f
+            ibmcloud plugin install schematics -f -r "IBM Cloud"
+          else
+            echo "Schematics plugin already installed"
           fi
           
+          # Verify plugin is available
+          echo "Installed plugins:"
+          ibmcloud plugin list
+          
           # get schematics workspace as json
-          WORKSPACE=$(ibmcloud terraform workspace get -i $WORKSPACE_ID --json)
+          WORKSPACE=$(ibmcloud schematics workspace get --id $WORKSPACE_ID --json)
           echo "Updating Schematics workspace from environment variables..."
           # iterate over ALL schematics worskpace variables to see if there is a matching env var
 
@@ -73,7 +80,7 @@ spec:
               
               # if the value exists as an env var, update the workspace
               if [ -n "${!KEY}" ]; then
-                  echo "$KEY found with value '${!KEY}'"; 
+                  echo "$KEY found with value '${!KEY}'";
                   SEARCH=$(cat temp.json | jq ".template_data[0].variablestore[]?.name")
 
                   echo "$SEARCH"
@@ -84,7 +91,7 @@ spec:
                           --arg updateKey "$KEY" \
                           --arg updateVal "${!KEY}" \
                           '.template_data[0].variablestore = [.template_data[0].variablestore[] | if (.name == $updateKey) then (.value = $updateVal) else . end]' )
-                  else 
+                  else
                       echo "It's NOT there, add it."
                       WORKSPACE=$(cat temp.json| jq -r ".template_data[0].variablestore[.template_data[0].variablestore| length] |= . + { \"name\": \"$KEY\", \"value\": \"${!KEY}\", \"type\": \"string\" }")
                       
@@ -93,7 +100,7 @@ spec:
           done
 
           cp temp.json workspace.json
-          ibmcloud terraform workspace update --id $WORKSPACE_ID --file workspace.json
+          ibmcloud schematics workspace update --id $WORKSPACE_ID --file workspace.json
 
           # cleanup
           rm -f workspace.json
