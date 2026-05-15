@@ -1,5 +1,5 @@
 teams:
-# Test pipeline trigger - can be removed after testing
+# Test pipeline trigger - can be removed
 - name: IBM-Maintainers
   description: The IBM team with Maintainer permission. This team can be added to
     individual repos with Maintainer access.
