@@ -42,6 +42,16 @@ spec:
 
           # force login (required by schematics cli)
           ibmcloud login --apikey $API_KEY -a "https://cloud.ibm.com" $REGION
+          
+          # Target resource group
+          echo "Targeting resource group: sysdig-ibm-dev"
+          ibmcloud target -g sysdig-ibm-dev
+          
+          # Install Schematics plugin if not present
+          if ! ibmcloud plugin list | grep -q schematics; then
+            echo "Installing Schematics plugin..."
+            ibmcloud plugin install schematics -f
+          fi
 
           # run terraform apply
           echo "ibmcloud terraform apply --id $WORKSPACE_ID --force"
