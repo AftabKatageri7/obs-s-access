@@ -62,7 +62,7 @@ spec:
           
           # run schematics plan
           echo "ibmcloud schematics plan --id $WORKSPACE_ID"
-          ACTIVITY=$(ibmcloud schematics plan --id $WORKSPACE_ID --json)
+          ACTIVITY=$(ibmcloud schematics plan --id $WORKSPACE_ID --output JSON)
           ACTIVITY_ID=$(echo $ACTIVITY | jq -r ".activityid")
           echo "Activity ID   $ACTIVITY_ID"
           # poll until status is no longer INPROGRESS, or if there is an error
