@@ -62,7 +62,7 @@ spec:
 
           # run schematics apply
           echo "ibmcloud schematics apply --id $WORKSPACE_ID --force"
-          ACTIVITY=$(ibmcloud schematics apply --id $WORKSPACE_ID --output JSON)
+          ACTIVITY=$(ibmcloud schematics apply --id $WORKSPACE_ID --force --output JSON)
           ACTIVITY_ID=$(echo $ACTIVITY | jq -r ".activityid")
           echo "Activity ID   $ACTIVITY_ID"
           # poll until status is no longer INPROGRESS, or if there is an error
